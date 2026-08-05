@@ -1,0 +1,16 @@
+generate-web-handbook/node_modules/
+.DS_Store
+.env
+.env.*
+
+# Generated handbook artifacts and intermediate experimental outputs
+handbooks/**/screenshots/
+handbooks/**/snapshots/
+handbooks/**/*.previous-*/
+handbooks/**/previous-*/
+
+# Optional: avoid layering large binary results into Git history
+*.png
+*.jpg
+*.jpeg
+*.webp

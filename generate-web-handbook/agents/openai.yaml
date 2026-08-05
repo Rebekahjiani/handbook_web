@@ -1,0 +1,4 @@
+interface:
+  display_name: "生成网站任务手册"
+  short_description: "生成任务工作流与按需加载的小型网站 skill"
+  default_prompt: "使用 $generate-web-handbook 从任务语料和页面证据生成渐进式网站操作 skill。"

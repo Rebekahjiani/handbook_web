@@ -1,0 +1,41 @@
+
+{
+
+  "$schema": "https://opencode.ai/config.json",
+
+  "provider": {
+
+    "tlaic": {
+
+      "npm": "@ai-sdk/openai-compatible",
+
+      "name": "TLAIC Gateway",
+
+      "options": {
+
+        "apiKey": "{env:TLAIC_API_KEY}",
+
+        "baseURL": "https://platform.tlaic.ac.cn/api/gateway/v1"
+
+      },
+
+      "models": {
+
+        "sophnet/DeepSeek-V4-Flash": {
+
+          "name": "DeepSeek V4 Flash"
+
+        }
+
+      }
+
+    }
+
+  },
+
+  "model": "tlaic/sophnet/DeepSeek-V4-Flash",
+
+  "small_model": "tlaic/sophnet/DeepSeek-V4-Flash"
+
+}
+

@@ -1,0 +1,12 @@
+{
+  "name": "generate-web-handbook",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/test-generator.mjs",
+    "rebuild": "node scripts/rebuild-from-snapshots.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.62.0"
+  }
+}

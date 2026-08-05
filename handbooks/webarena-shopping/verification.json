@@ -1,0 +1,429 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-05T05:24:36.420Z",
+  "siteName": "webarena-shopping",
+  "summary": {
+    "checked": 500,
+    "passed": 471,
+    "failed": 29,
+    "passRate": 0.942
+  },
+  "failures": [
+    {
+      "url": "http://localhost:7770/",
+      "actionId": "a3",
+      "role": "link",
+      "name": "Sign Out",
+      "primary": {
+        "kind": "role",
+        "role": "link",
+        "name": "Sign Out",
+        "exact": true,
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a3",
+      "role": "link",
+      "name": "Sign Out",
+      "primary": {
+        "kind": "role",
+        "role": "link",
+        "name": "Sign Out",
+        "exact": true,
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a102",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-490",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a103",
+      "role": "link",
+      "name": "NOZE Rustic Coat Rack Wall Mounted Shelf with 4 Hooks, Hanging Entryway Organizer for Mug Coffee Cup, Holding Solid Wooden Shelf with 2 Baskets for Kitchen Livi",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/noze-rustic-coat-rack-wall-mounted-shelf-with-4-hooks-hanging-entryway-organizer-for-mug-coffee-cup-holding-solid-wooden-shelf-with-2-baskets-for-kitchen-living-room-bathroom-and-bedroom.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a104",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-489",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a105",
+      "role": "link",
+      "name": "Uttermost Volterra Crackled Taupe-Gray Ceramic Table Lamp",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/uttermost-volterra-crackled-taupe-gray-ceramic-table-lamp.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a106",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-491",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a107",
+      "role": "link",
+      "name": "Plus Size Lingerie for Women Sexy for Sex Naughty Eyelash Lace Bodysuit Naughty Mesh One Piece Teddy Bodysuit Outfits",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/plus-size-lingerie-for-women-sexy-for-sex-naughty-eyelash-lace-bodysuit-naughty-mesh-one-piece-teddy-bodysuit-outfits.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a108",
+      "role": "button",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-validate-detail > div:nth-of-type(2) > div:nth-of-type(1) > button",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "actionId": "a109",
+      "role": "link",
+      "name": "View All",
+      "primary": {
+        "kind": "css",
+        "selector": "a.action[href=\"http://localhost:7770/customer/account/#my-orders-table\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a3",
+      "role": "link",
+      "name": "Sign Out",
+      "primary": {
+        "kind": "role",
+        "role": "link",
+        "name": "Sign Out",
+        "exact": true,
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a97",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-490",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a98",
+      "role": "link",
+      "name": "NOZE Rustic Coat Rack Wall Mounted Shelf with 4 Hooks, Hanging Entryway Organizer for Mug Coffee Cup, Holding Solid Wooden Shelf with 2 Baskets for Kitchen Livi",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/noze-rustic-coat-rack-wall-mounted-shelf-with-4-hooks-hanging-entryway-organizer-for-mug-coffee-cup-holding-solid-wooden-shelf-with-2-baskets-for-kitchen-living-room-bathroom-and-bedroom.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a99",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-489",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a100",
+      "role": "link",
+      "name": "Uttermost Volterra Crackled Taupe-Gray Ceramic Table Lamp",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/uttermost-volterra-crackled-taupe-gray-ceramic-table-lamp.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a101",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-491",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a102",
+      "role": "link",
+      "name": "Plus Size Lingerie for Women Sexy for Sex Naughty Eyelash Lace Bodysuit Naughty Mesh One Piece Teddy Bodysuit Outfits",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/plus-size-lingerie-for-women-sexy-for-sex-naughty-eyelash-lace-bodysuit-naughty-mesh-one-piece-teddy-bodysuit-outfits.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a103",
+      "role": "button",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-validate-detail > div:nth-of-type(2) > div:nth-of-type(1) > button",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "actionId": "a104",
+      "role": "link",
+      "name": "View All",
+      "primary": {
+        "kind": "css",
+        "selector": "a.action[href=\"http://localhost:7770/customer/account/#my-orders-table\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a3",
+      "role": "link",
+      "name": "Sign Out",
+      "primary": {
+        "kind": "role",
+        "role": "link",
+        "name": "Sign Out",
+        "exact": true,
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a96",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-490",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a97",
+      "role": "link",
+      "name": "NOZE Rustic Coat Rack Wall Mounted Shelf with 4 Hooks, Hanging Entryway Organizer for Mug Coffee Cup, Holding Solid Wooden Shelf with 2 Baskets for Kitchen Livi",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/noze-rustic-coat-rack-wall-mounted-shelf-with-4-hooks-hanging-entryway-organizer-for-mug-coffee-cup-holding-solid-wooden-shelf-with-2-baskets-for-kitchen-living-room-bathroom-and-bedroom.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a98",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-489",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a99",
+      "role": "link",
+      "name": "Uttermost Volterra Crackled Taupe-Gray Ceramic Table Lamp",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/uttermost-volterra-crackled-taupe-gray-ceramic-table-lamp.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a100",
+      "role": "checkbox",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-item-491",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a101",
+      "role": "link",
+      "name": "Plus Size Lingerie for Women Sexy for Sex Naughty Eyelash Lace Bodysuit Naughty Mesh One Piece Teddy Bodysuit Outfits",
+      "primary": {
+        "kind": "css",
+        "selector": "a.product-item-link[href=\"http://localhost:7770/plus-size-lingerie-for-women-sexy-for-sex-naughty-eyelash-lace-bodysuit-naughty-mesh-one-piece-teddy-bodysuit-outfits.html\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a102",
+      "role": "button",
+      "name": "Add to Cart",
+      "primary": {
+        "kind": "css",
+        "selector": "#reorder-validate-detail > div:nth-of-type(2) > div:nth-of-type(1) > button",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/video-games/nintendo-switch.html",
+      "actionId": "a103",
+      "role": "link",
+      "name": "View All",
+      "primary": {
+        "kind": "css",
+        "selector": "a.action[href=\"http://localhost:7770/customer/account/#my-orders-table\"]",
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    },
+    {
+      "url": "http://localhost:7770/beauty-personal-care/makeup/makeup-remover.html",
+      "actionId": "a3",
+      "role": "link",
+      "name": "Sign Out",
+      "primary": {
+        "kind": "role",
+        "role": "link",
+        "name": "Sign Out",
+        "exact": true,
+        "count": 1
+      },
+      "count": 0,
+      "visible": false,
+      "passed": false
+    }
+  ]
+}
