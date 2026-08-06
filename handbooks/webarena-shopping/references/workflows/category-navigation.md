@@ -30,16 +30,16 @@
 
 ## 已验证入口
 
-- Men - Clothing, Shoes & Jewelry：`/clothing-shoes-jewelry/men.html`；[页面快照](../../snapshots/pages/12-clothing-shoes-jewelry-men-html.json)
-- Clothing - Men - Clothing, Shoes & Jewelry：`/clothing-shoes-jewelry/men/clothing.html`；[页面快照](../../snapshots/pages/22-clothing-shoes-jewelry-men-clothing-html.json)
-- AC Adapters - Power Accessories - Electronics：`/electronics/power-accessories/ac-adapters.html`；[页面快照](../../snapshots/pages/06-electronics-power-accessories-ac-adapters-html.json)
+- One Stop Market：`/`；[页面快照](../../snapshots/pages/01-home.json)
+- Cabinets, Racks & Shelves - Office Furniture & Lighting - Office Products：`/office-products/office-furniture-lighting/cabinets-racks-shelves.html`；[页面快照](../../snapshots/pages/02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json)
+- Children's Dental Care - Oral Care - Beauty & Personal Care：`/beauty-personal-care/oral-care/children-s-dental-care.html`；[页面快照](../../snapshots/pages/03-beauty-personal-care-oral-care-children-s-dental-care-html.json)
 
 ## 操作锚点
 
-- Search：`getByRole("button", { name: "Search", exact: true })`；证据：`01-home.json`
-- Page Next：`locator("a.action[href=\"${SITE_ORIGIN}/?pbaocw=2\"]")`；证据：`01-home.json`
-- View as List：`locator("a.modes-mode[href=\"#\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
-- Sort By：`locator("select[data-role=\"sorter\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
+- Advanced Search：`locator("a.action[href=\"${SITE_ORIGIN}/catalogsearch/advanced/\"]")`；证据：`01-home.json`
+- Beauty & Personal Care：`locator("a.level-top[href=\"${SITE_ORIGIN}/beauty-personal-care.html\"]")`；证据：`01-home.json`
+- Sports & Outdoors：`locator("a.level-top[href=\"${SITE_ORIGIN}/sports-outdoors.html\"]")`；证据：`01-home.json`
+- Clothing, Shoes & Jewelry：`locator("a.level-top[href=\"${SITE_ORIGIN}/clothing-shoes-jewelry.html\"]")`；证据：`01-home.json`
 
 ## 风险与恢复
 

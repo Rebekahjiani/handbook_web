@@ -13,6 +13,16 @@ import {
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
 
+async function loadWorkflowDefs(configPath) {
+  if (!configPath) return null;
+  const resolved = path.resolve(configPath);
+  const mod = await import(resolved);
+  if (!Array.isArray(mod.default)) {
+    throw new Error(`--workflow-config must export a default array: ${resolved}`);
+  }
+  return mod.default;
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -106,7 +116,7 @@ async function waitForDomSettled(page) {
     const signature = await page.evaluate(
       () =>
         `${document.querySelectorAll("a[href]").length}:` +
-        `${document.querySelectorAll("li.product-item").length}:` +
+        `${document.querySelectorAll("button,input,select,[role='button'],[role='tab']").length}:` +
         `${document.body?.innerText.length || 0}`,
     );
     if (signature === previous) {
@@ -563,10 +573,11 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.url) {
     throw new Error(
-      "Usage: crawl-site.mjs --url URL [--site NAME] [--output DIR] [--cdp URL] [--max-pages N] [--max-depth N] [--coverage-corpus FILE] [--focus-tasks FILE] [--tasks FILE] [--site-key NAME] [--context-model PATH] [--max-task-seeds N] [--previous-router FILE] [--allow-route-removal a,b] [--fresh]",
+      "Usage: crawl-site.mjs --url URL [--site NAME] [--output DIR] [--cdp URL] [--max-pages N] [--max-depth N] [--coverage-corpus FILE] [--focus-tasks FILE] [--tasks FILE] [--site-key NAME] [--context-model PATH] [--max-task-seeds N] [--previous-router FILE] [--allow-route-removal a,b] [--workflow-config FILE] [--fresh]",
     );
   }
 
+  const workflowDefs = await loadWorkflowDefs(args["workflow-config"] || null);
   const startUrl = normalizeUrl(args.url);
   if (!startUrl) throw new Error(`Invalid URL: ${args.url}`);
   const startOrigin = new URL(startUrl).origin;
@@ -857,6 +868,7 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    ...(workflowDefs ? { workflowDefs } : {}),
   });
   const routerAudit = auditRouter({
     router: generated.router,

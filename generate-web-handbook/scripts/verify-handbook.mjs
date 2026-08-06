@@ -4,11 +4,18 @@ import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+const BOOL_FLAGS = new Set(["click-safe", "fresh", "save-html"]);
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {
     if (!argv[i].startsWith("--")) continue;
-    args[argv[i].slice(2)] = argv[++i];
+    const key = argv[i].slice(2);
+    if (BOOL_FLAGS.has(key)) {
+      args[key] = true;
+    } else {
+      args[key] = argv[++i];
+    }
   }
   return args;
 }
@@ -50,6 +57,8 @@ async function main() {
   const context = browser.contexts()[0];
   if (!context) throw new Error("The CDP browser has no context");
   const page = context.pages()[0] || (await context.newPage());
+  const UNSAFE_HREF = /\/(?:logout|signout|sign-out|checkout|delete|remove|place-order|cancel)\b/i;
+  const clickSafe = Boolean(args["click-safe"]);
   const checks = [];
 
   try {
@@ -61,6 +70,7 @@ async function main() {
       await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
       for (const action of pageRecord.actions) {
         if (checks.length >= maxActions) break;
+        if (clickSafe && action.href && UNSAFE_HREF.test(action.href)) continue;
         try {
           const locator = toLocator(page, action.primary);
           const count = await locator.count();

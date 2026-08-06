@@ -71,7 +71,7 @@
       "priority": 4,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "open .*category page|category page.*filtered|browse products",
+      "intent_pattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
       "skill_file": "webarena-shopping/runtime-skills/category-navigation/SKILL.md",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "category-navigation",

@@ -22,8 +22,9 @@ const WORKFLOWS = [
       "只有已访问行数覆盖页面报告的总记录数，或在完整当前页确认 Next 不存在后，才用去重台账计数或求和。",
     ],
     success: [
-      "每个计入结果的订单都满足日期、状态和商品条件。",
-      "计数、分组和金额都能回溯到同一份去重台账。",
+      "非空结果：accepted_records 非空，且每条记录都有日期、状态和商品条件的行级证据。" +
+        "——空结果：accepted_records 为空，且已记录终页证据（最后一页 URL、已访问行数、页面报告总数三者吻合）。两种情况必须满足其中之一，不得仅凭台账为空就声明 SUCCESS。",
+      "计数、金额和分组能回溯到同一份去重台账；无匹配时返回任务协议要求的 null 并附终页证据。",
     ],
     checks: [
       "“spent”默认排除 Canceled；退款任务只处理 Canceled，除非任务明确另有状态口径。",
@@ -55,8 +56,9 @@ const WORKFLOWS = [
       "读取任务要求的字段或商品选项，保留页面显示的单位和格式。",
     ],
     success: [
-      "列表行、详情页订单号和目标条件属于同一对象。",
-      "返回值保留页面显示的单位；无匹配时回到订单历史首页再结束。",
+      "找到目标：列表行与详情页订单号一致，且目标条件有行级证据。" +
+        "——无匹配：已记录终页证据（末页 URL、已访问行数、页面报告总数一致），再回到订单历史首页结束。两种情况必须满足其中之一。",
+      "返回值保留页面显示的单位；不得靠猜测或拼接 URL 构造结果。",
     ],
     checks: [
       "分页后废弃旧引用；不要根据订单号拼接详情 URL。",
@@ -123,12 +125,12 @@ const WORKFLOWS = [
     coverageScope: "full",
     steps: [
       "确认当前商品名称与任务一致。",
-      "进入评论区域，按评分、文本条件或分页范围读取。",
-      "把评论者、标题、评分和正文保持在同一条评论上下文中。",
+      "进入评论区域，按评分或文本条件读取；评论区有独立分页时逐页读取，按（作者＋标题＋评分）复合键去重，不得仅读首屏可见评论就声明完整。",
+      "把评论者、标题、评分和正文保持在同一条评论容器中。",
       "去重后按任务指定的数据结构返回。",
     ],
     success: [
-      "结果全部来自目标商品，且满足评分或文本条件。",
+      "结果全部来自目标商品，满足评分或文本条件，且已覆盖全部评论分页（末页无 Next 或已达到任务要求的数量上限）。",
       "没有把相邻评论的作者、标题和正文混在一起。",
     ],
     checks: [
@@ -168,9 +170,9 @@ const WORKFLOWS = [
     keywords: "打开分类、浏览商品、分类页、价格上限",
     modelTerms: ["search", "category", "listing"],
     task:
-      /open .*category page|category page.*filtered|browse products/i,
+      /open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)/i,
     evidence:
-      /search|category|sort|filter|price|next|view as|搜索|分类|筛选|排序/i,
+      /\bcategory\b|category page|breadcrumb|catalog|menu|navigation|分类|面包屑|菜单/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
       "从已观察到的分类路径提示中选择语义最精确的一条；没有提示时再沿菜单逐级进入。",
@@ -198,7 +200,7 @@ const WORKFLOWS = [
     task:
       /price range|full names|available models|products from/i,
     evidence:
-      /search|category|sort|filter|price|next|view as|搜索|分类|筛选|排序/i,
+      /toolbar-amount|pages-item-next|limiter|per page|total.*result|page.*of|分页|每页|共.*件/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
       "用最短且有区分度的查询词建立候选集，并固定品牌、类别和产品类型条件。",
@@ -231,18 +233,18 @@ const WORKFLOWS = [
     task:
       /product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between/i,
     evidence:
-      /search|category|sort|filter|price|next|view as|搜索|分类|筛选|排序/i,
+      /sort.by|sorter|sort-by|price asc|price desc|relevance|ascending|descending|排序|价格升序|价格降序/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
       "先解析比较器：`least expensive` 按价格升序，`most expensive` 按价格降序，`most recent released` 按产品发布日期降序；`best` 保留站点相关性或任务明确给出的质量信号。",
       "把候选验收拆成两个独立谓词：`is_target_product_type` 判断它是任务所说的主商品/配件类型，`satisfies_task_constraint` 判断平台兼容、容量等约束；两者都为真才进入候选集。多平台配件可用明确兼容性满足平台约束，不要求独占该平台分类；主机本体不能冒充配件。",
       "优先使用站点已有的精确分类或一次主搜索建立候选集并排序。在价格降序已验证生效后，从顶部依次验收，不跨到无关分类分支重新比较。",
       "按比较器顺序核对硬约束；容量、数量、兼容性必须修饰目标商品本身，优先用规格/详情证据，不把包装、附件或营销数字当容量。",
-      "找到第一个满足比较器和全部硬约束的候选后，用候选表保存的实时链接打开商品页。",
-      "重新读取当前 URL、标题、价格和约束证据；确认同一商品后立即结束，不再搜索、排序或返回首页。",
+      "找到第一个满足比较器和全部硬约束的候选后，从 accepted_candidates 台账中取出该商品的精确 URL，直接导航到该 URL（不通过再次点击搜索结果中的视觉元素）。",
+      "打开商品页后立刻执行字符串比较：location.href 必须等于台账中的精确 URL；不一致时重新导航，不得用视觉近似判断跳过该检查。确认后立即结束。",
     ],
     success: [
-      "最终位于满足所有硬约束的商品详情页。",
+      "最终位于满足所有硬约束的商品详情页，且 location.href 字符串等于 accepted_candidates 台账中该商品的精确 URL（非目测近似）。",
       "已证明在完整候选集内不存在按任务比较器更优且同样满足条件的商品。",
     ],
     checks: [
@@ -392,15 +394,30 @@ function taskIntent(task) {
   return task.intent || task.task || task.description || task.name || "";
 }
 
-function classifyTask(task) {
+function classifyTask(task, workflowDefs = WORKFLOWS) {
   const intent = taskIntent(task);
-  const matched =
-    WORKFLOWS.find((workflow) => workflow.task.test(intent)) || WORKFLOWS.at(-1);
-  if (["read-content", "edit-submit", "other"].includes(matched.id)) {
-    const navigation = WORKFLOWS.find((workflow) => workflow.id === "navigation");
-    if (navigation.task.test(intent)) return navigation;
+  const fallback = workflowDefs.at(-1);
+  let best = null;
+  let bestLen = -1;
+  for (const workflow of workflowDefs) {
+    if (workflow.fallback) continue;
+    const m = intent.match(workflow.task);
+    if (!m) continue;
+    const len = m[0].length;
+    if (len > bestLen) {
+      bestLen = len;
+      best = workflow;
+    }
   }
-  return matched;
+  if (!best) return fallback;
+  if (["read-content", "edit-submit", "other"].includes(best.id)) {
+    const navigation = workflowDefs.find((w) => w.id === "navigation");
+    if (navigation && navigation.task.test(intent)) {
+      const nm = intent.match(navigation.task);
+      if (nm && nm[0].length > bestLen) return navigation;
+    }
+  }
+  return best;
 }
 
 function locatorText(action, origin) {
@@ -662,12 +679,8 @@ function rankLocators(workflow, pages, origin) {
 
 const RUNTIME_BASE = `# 运行规则
 
-- 本技能已由总 router 按站点和任务预选；只执行本工作流。
-- 以实时浏览器状态为准。导航或分页后废弃旧引用，并重新核对 URL、标题和对象身份。
-- 列表任务优先在当前页面做一次作用域明确的 DOM 读取；不要反复保存或加载整页快照。
 - 保持一个短台账：目标、固定约束、已验证记录、未访问页。不要在执行中改变口径。
 - 每次分页只允许一次批量读取；记录页面身份，禁止重复访问同一页。
-- 提交前重新读取当前 URL、标题和目标对象；不得用旧观察描述最终状态。
 - 达到成功判据后立即结束。任务协议要求 NOT_FOUND 时使用 \`retrieved_data: null\`，不要用空数组。
 - 不得把中断、缺少证据或空结果包装成 SUCCESS；不得回答或索取下一题。
 `;
@@ -915,6 +928,9 @@ function executionContractMarkdownLink(workflowId) {
 }
 
 function stateVariables(definition) {
+  if (Array.isArray(definition.stateVars) && definition.stateVars.length) {
+    return definition.stateVars;
+  }
   if (definition.id === "product-selection") {
     return [
       "`comparator`：任务要求的比较字段、方向和并列规则",
@@ -1066,10 +1082,9 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
     "",
     "## 最终状态闸门",
     "",
-    "- 成功前的最后一次浏览器调用必须读取实时 `URL + title + H1/目标对象`；最终答案只能描述这次读取到的当前状态。",
-    "- NAVIGATE 任务中，当前 URL 必须精确等于选中的候选 URL，并逐项保留任务要求的小数边界与 query 参数；不允许用语义近似页面代替。",
-    "- RETRIEVE 任务中，先按要求校验返回值的类型、空值协议和字段集合；浏览器中断或证据不足时不得返回 SUCCESS。",
-    "- 如果口头选中的候选与当前 URL 不一致，必须导航到候选并重新执行本闸门；否则判定失败。",
+    "- 成功前的最后一次浏览器调用必须读取实时 `location.href + document.title`；最终答案只能描述这次读取到的状态。",
+    "- NAVIGATE：将 location.href 与台账中记录的目标 URL 做字符串比较（含路径、query 参数和小数边界）；不一致时直接导航到台账 URL，再重新读取，不得以视觉近似替代字符串比较。",
+    "- RETRIEVE：校验返回值的类型、字段集合和空值协议（NOT_FOUND → null，不是空数组）；证据不足时不得返回 SUCCESS。",
     "",
     "## 完成证明",
     "",
@@ -1354,21 +1369,22 @@ export function buildWorkflowHandbook({
   coverageTasks = tasks || [],
   focusTasks = tasks || coverageTasks,
   contextModel = null,
+  workflowDefs = WORKFLOWS,
 }) {
   const coverageGrouped = new Map(
-    WORKFLOWS.map((workflow) => [workflow.id, []]),
+    workflowDefs.map((workflow) => [workflow.id, []]),
   );
-  const focusGrouped = new Map(WORKFLOWS.map((workflow) => [workflow.id, []]));
+  const focusGrouped = new Map(workflowDefs.map((workflow) => [workflow.id, []]));
   for (const task of coverageTasks) {
-    coverageGrouped.get(classifyTask(task).id).push(task);
+    coverageGrouped.get(classifyTask(task, workflowDefs).id).push(task);
   }
-  for (const task of focusTasks) focusGrouped.get(classifyTask(task).id).push(task);
+  for (const task of focusTasks) focusGrouped.get(classifyTask(task, workflowDefs).id).push(task);
   const typeCounts = {};
   for (const task of coverageTasks) {
     const type = taskType(task);
     typeCounts[type] = (typeCounts[type] || 0) + 1;
   }
-  const workflows = WORKFLOWS.map((definition) => {
+  const workflows = workflowDefs.map((definition) => {
     const workflowTasks = coverageGrouped.get(definition.id);
     const workflowFocusTasks = focusGrouped.get(definition.id);
     const locators = rankLocators(definition, pages, origin);

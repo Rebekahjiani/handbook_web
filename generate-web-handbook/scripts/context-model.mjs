@@ -79,7 +79,12 @@ function deduplicate(items, key) {
 export async function loadContextModel(source) {
   if (!source) return null;
   const resolved = path.resolve(source);
-  const stat = await fs.stat(resolved);
+  let stat;
+  try {
+    stat = await fs.stat(resolved);
+  } catch {
+    return null;
+  }
   let model;
   if (stat.isDirectory()) {
     model = await loadDirectory(resolved);

@@ -17,7 +17,7 @@
 |---|---|---:|---|
 | 订单数量、消费金额、时间范围、商品类别、退款 | [订单筛选、金额聚合与退款](workflows/order-aggregation.md) | 19 / 9 | 关键步骤有 |
 | 最近订单、订单状态、已购商品、规格、配送与账单字段 | [订单查找与已购商品属性](workflows/order-lookup.md) | 22 / 5 | 关键步骤有 |
-| 商品详情、评论、评分、评论者、评论标题、摘要 | [商品详情与评论](workflows/reviews.md) | 12 / 2 | 关键步骤有 |
+| 商品详情、评论、评分、评论者、评论标题、摘要 | [商品详情与评论](workflows/reviews.md) | 1 / 0 | 关键步骤有 |
 | 登录、注册、账户、个人信息、地址、联系表单 | [账户、地址与表单](workflows/account-forms.md) | 0 / 0 | 仅入口 |
 | 打开分类、浏览商品、分类页、价格上限 | [分类页导航与价格过滤](workflows/category-navigation.md) | 10 / 6 | 仅入口 |
 | 价格范围、品牌商品、完整名称、可用型号 | [商品集合、名称与价格聚合](workflows/catalog-aggregation.md) | 11 / 7 | 仅入口 |
@@ -25,7 +25,7 @@
 | 搜索、筛选、排序、商品发现 | [通用搜索、筛选与商品发现](workflows/search-discovery.md) | 11 / 0 | 仅入口 |
 | 读取、查询、列表、详情、统计、下载、导出 | [读取列表、详情与结构化数据](workflows/read-content.md) | 1 / 0 | 关键步骤有 |
 | 创建、编辑、更新、删除、上传、保存、发送、订阅 | [创建、修改与提交](workflows/edit-submit.md) | 0 / 0 | 仅入口 |
-| 打开、前往、进入、导航、页面 | [页面导航](workflows/navigation.md) | 0 / 0 | 关键步骤有 |
+| 打开、前往、进入、导航、页面 | [页面导航](workflows/navigation.md) | 11 / 2 | 关键步骤有 |
 | 未命中已有工作流的任务 | [未归类任务](workflows/other.md) | 0 / 0 | 仅入口 |
 
 ## 覆盖缺口

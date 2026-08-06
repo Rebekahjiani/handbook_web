@@ -36,16 +36,14 @@
 
 ## 已验证入口
 
-- Men - Clothing, Shoes & Jewelry：`/clothing-shoes-jewelry/men.html`；[页面快照](../../snapshots/pages/12-clothing-shoes-jewelry-men-html.json)
-- Clothing - Men - Clothing, Shoes & Jewelry：`/clothing-shoes-jewelry/men/clothing.html`；[页面快照](../../snapshots/pages/22-clothing-shoes-jewelry-men-clothing-html.json)
-- AC Adapters - Power Accessories - Electronics：`/electronics/power-accessories/ac-adapters.html`；[页面快照](../../snapshots/pages/06-electronics-power-accessories-ac-adapters-html.json)
+- Cabinets, Racks & Shelves - Office Furniture & Lighting - Office Products：`/office-products/office-furniture-lighting/cabinets-racks-shelves.html`；[页面快照](../../snapshots/pages/02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json)
 
 ## 操作锚点
 
-- Search：`getByRole("button", { name: "Search", exact: true })`；证据：`01-home.json`
-- Page Next：`locator("a.action[href=\"${SITE_ORIGIN}/?pbaocw=2\"]")`；证据：`01-home.json`
-- View as List：`locator("a.modes-mode[href=\"#\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
-- Sort By：`locator("select[data-role=\"sorter\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
+- Page 2：`locator("a.page[href=\"${SITE_ORIGIN}/office-products/office-furniture-lighting/cabinets-racks-shelves.html?p=2\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
+- Page 3：`locator("a.page[href=\"${SITE_ORIGIN}/office-products/office-furniture-lighting/cabinets-racks-shelves.html?p=3\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
+- Page 4：`locator("a.page[href=\"${SITE_ORIGIN}/office-products/office-furniture-lighting/cabinets-racks-shelves.html?p=4\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
+- Page 5：`locator("a.page[href=\"${SITE_ORIGIN}/office-products/office-furniture-lighting/cabinets-racks-shelves.html?p=5\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
 
 ## 风险与恢复
 

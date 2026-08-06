@@ -9,6 +9,16 @@ import {
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
 
+async function loadWorkflowDefs(configPath) {
+  if (!configPath) return null;
+  const resolved = path.resolve(configPath);
+  const mod = await import(resolved);
+  if (!Array.isArray(mod.default)) {
+    throw new Error(`--workflow-config must export a default array: ${resolved}`);
+  }
+  return mod.default;
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -92,6 +102,7 @@ async function main() {
   const coverageTasks = await loadTaskCorpus(coverageCorpusFile, siteKey);
   const focusTasks = await loadTaskCorpus(focusTasksFile, siteKey);
   const contextModel = await loadContextModel(contextModelPath);
+  const workflowDefs = await loadWorkflowDefs(args["workflow-config"] || manifest.workflowConfig || null);
   const skillName = `use-${slug(siteName)}`.replace(/-$/, "");
   const pages = selectors.pages || [];
 
@@ -104,6 +115,7 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    ...(workflowDefs ? { workflowDefs } : {}),
   });
   const previousRouterFile = path.join(siteDir, "router.json");
   const previousRouter = (await pathExists(previousRouterFile))

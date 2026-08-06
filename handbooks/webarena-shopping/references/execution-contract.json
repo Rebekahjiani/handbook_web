@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-05T07:16:50.626Z",
+  "generatedAt": "2026-08-06T08:51:42.021Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -192,7 +192,7 @@
       ],
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/category-navigation/SKILL.md",
-      "intentPattern": "open .*category page|category page.*filtered|browse products",
+      "intentPattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
