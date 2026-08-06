@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-06T08:51:42.021Z",
+  "generatedAt": "2026-08-06T09:21:46.638Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -22,19 +22,80 @@
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
       "allowedActions": [
+        "read_current_list_page_v1",
         "verify_final_state_v1"
       ],
-      "forbiddenActions": [],
+      "forbiddenActions": [
+        {
+          "kind": "browser.evaluate",
+          "when": "extracting product-list cards",
+          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+        },
+        {
+          "kind": "incremental-card-observation",
+          "when": "product-list selectors are available",
+          "reason": "List pages must be read atomically to prevent drift and repeated observation."
+        }
+      ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
-        "listReadMaxCallsPerPageId": null,
-        "customListEvaluateMaxCalls": null,
+        "listReadMaxCallsPerPageId": 1,
+        "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
       },
-      "actions": [],
+      "actions": [
+        {
+          "actionId": "read_current_list_page_v1",
+          "kind": "browser.evaluate",
+          "deterministic": true,
+          "scope": "current-list-page",
+          "maxCallsPerPageId": 1,
+          "selectors": {
+            "item": "li.product-item",
+            "fields": {
+              "name": "a.product-item-link",
+              "price": ".price-box .price",
+              "link": "a.product-item-link"
+            },
+            "pagination": {
+              "next": ".pages .pages-item-next > a.action.next",
+              "limiter": "select[data-role='limiter']",
+              "total": ".toolbar-amount"
+            }
+          },
+          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "requiredOutput": {
+            "actionId": "read_current_list_page_v1",
+            "requiredKeys": [
+              "ok",
+              "pageId",
+              "totalText",
+              "rawCardCount",
+              "ignoredCardCount",
+              "itemCount",
+              "items",
+              "nextHref",
+              "complete",
+              "currentLimiterValue",
+              "limiterOptions",
+              "errors"
+            ],
+            "itemKeys": [
+              "name",
+              "price",
+              "url"
+            ],
+            "okWhen": [
+              "errors is empty",
+              "itemCount equals items.length",
+              "each item has name, url, and numeric price"
+            ]
+          }
+        }
+      ],
       "finalStateGate": {
         "actionId": "verify_final_state_v1",
         "kind": "cdp.readCurrentPageState",
@@ -66,19 +127,80 @@
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
       "allowedActions": [
+        "read_current_list_page_v1",
         "verify_final_state_v1"
       ],
-      "forbiddenActions": [],
+      "forbiddenActions": [
+        {
+          "kind": "browser.evaluate",
+          "when": "extracting product-list cards",
+          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+        },
+        {
+          "kind": "incremental-card-observation",
+          "when": "product-list selectors are available",
+          "reason": "List pages must be read atomically to prevent drift and repeated observation."
+        }
+      ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
-        "listReadMaxCallsPerPageId": null,
-        "customListEvaluateMaxCalls": null,
+        "listReadMaxCallsPerPageId": 1,
+        "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
       },
-      "actions": [],
+      "actions": [
+        {
+          "actionId": "read_current_list_page_v1",
+          "kind": "browser.evaluate",
+          "deterministic": true,
+          "scope": "current-list-page",
+          "maxCallsPerPageId": 1,
+          "selectors": {
+            "item": "li.product-item",
+            "fields": {
+              "name": "a.product-item-link",
+              "price": ".price-box .price",
+              "link": "a.product-item-link"
+            },
+            "pagination": {
+              "next": ".pages .pages-item-next > a.action.next",
+              "limiter": "select[data-role='limiter']",
+              "total": ".toolbar-amount"
+            }
+          },
+          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "requiredOutput": {
+            "actionId": "read_current_list_page_v1",
+            "requiredKeys": [
+              "ok",
+              "pageId",
+              "totalText",
+              "rawCardCount",
+              "ignoredCardCount",
+              "itemCount",
+              "items",
+              "nextHref",
+              "complete",
+              "currentLimiterValue",
+              "limiterOptions",
+              "errors"
+            ],
+            "itemKeys": [
+              "name",
+              "price",
+              "url"
+            ],
+            "okWhen": [
+              "errors is empty",
+              "itemCount equals items.length",
+              "each item has name, url, and numeric price"
+            ]
+          }
+        }
+      ],
       "finalStateGate": {
         "actionId": "verify_final_state_v1",
         "kind": "cdp.readCurrentPageState",

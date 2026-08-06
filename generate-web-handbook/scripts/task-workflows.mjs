@@ -686,7 +686,7 @@ const RUNTIME_BASE = `# 运行规则
 `;
 
 function observedStructures(workflow, pages) {
-  const wanted = /catalog|product|search|category/.test(workflow.id)
+  const wanted = /catalog|product|search|category|order/.test(workflow.id)
     ? new Set(["product-list", "pagination"])
     : new Set();
   const unique = new Map();
@@ -740,7 +740,7 @@ function listReadSpec(structures) {
   const name = product.fields?.name;
   const price = product.fields?.price;
   const link = product.fields?.link;
-  if (!name || !price || !link) return null;
+  if (!name || !link) return null;
   return {
     actionId: LIST_READ_ACTION_ID,
     selectors: {
@@ -771,16 +771,16 @@ function listReadTemplateFromSpec(spec) {
   const items = cards.map(card => {
     const nameNode = card.querySelector(${selector(spec.selectors.fields.name)});
     const link = card.querySelector(${selector(spec.selectors.fields.link)});
-    const priceText = card.querySelector(${selector(spec.selectors.fields.price)})?.textContent || "";
-    const priceMatch = priceText.replace(/,/g, "").match(/\\d+(?:\\.\\d{1,2})?/);
+    ${spec.selectors.fields.price ? `const priceText = card.querySelector(${selector(spec.selectors.fields.price)})?.textContent || "";
+    const priceMatch = priceText.replace(/,/g, "").match(/\\d+(?:\\.\\d{1,2})?/);` : `const priceMatch = null;`}
     return {
       name: nameNode?.textContent.trim() || "",
-      price: priceMatch ? Number(priceMatch[0]) : null,
+      ${spec.selectors.fields.price ? `price: priceMatch ? Number(priceMatch[0]) : null,` : ""}
       url: link?.href || ""
     };
   });
   if (items.length === 0) errors.push("product-list-empty-or-selector-mismatch");
-  if (items.some(item => !item.name || !item.url || item.price === null)) {
+  if (items.some(item => !item.name || !item.url${spec.selectors.fields.price ? " || item.price === null" : ""})) {
     errors.push("required-product-field-missing");
   }
   const next = ${spec.selectors.pagination.next ? `document.querySelector(${nextSelector})` : "null"};
@@ -847,11 +847,13 @@ function listReadContract(structures) {
         "limiterOptions",
         "errors",
       ],
-      itemKeys: ["name", "price", "url"],
+      itemKeys: spec.selectors.fields.price ? ["name", "price", "url"] : ["name", "url"],
       okWhen: [
         "errors is empty",
         "itemCount equals items.length",
-        "each item has name, url, and numeric price",
+        spec.selectors.fields.price
+          ? "each item has name, url, and numeric price"
+          : "each item has name and url",
       ],
     },
   };

@@ -14,7 +14,7 @@
   "taskSeedsQueued": 2,
   "status": "rebuilt_from_snapshots",
   "startedAt": "2026-08-03T01:43:14.251Z",
-  "updatedAt": "2026-08-06T08:51:42.035Z",
+  "updatedAt": "2026-08-06T09:21:46.654Z",
   "pages": [
     {
       "url": "http://localhost:7770/",
@@ -10419,7 +10419,7 @@
     "workflowGaps": 4,
     "redirectsSkipped": 0,
     "errors": 0,
-    "executionContractActions": 4
+    "executionContractActions": 6
   },
   "coverageCorpusFile": "/Users/rebekah/artifacttrace/local-at/benchmarks/experiments/webarena-handbook-iteration/rounds/round-05/frozen-input/coverage-corpus.json",
   "focusTasksFile": "/Users/rebekah/artifacttrace/local-at/benchmarks/experiments/webarena-handbook-iteration/rounds/round-04/frozen-input/task-corpus.json",

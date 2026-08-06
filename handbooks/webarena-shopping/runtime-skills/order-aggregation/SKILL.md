@@ -29,6 +29,13 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - `accepted_records`：满足时间与状态条件的订单台账
 - `next_href`：唯一待访问的下一页；无下一页时为 `null`
 
+## 硬执行契约
+
+- `read_current_list_page_v1` 是当前商品列表页唯一允许的列表读取动作。
+- 对每个页面身份只调用一次 evaluate，并完整执行下方模板；不得先用 snapshot/find 逐卡观察，也不得把模板拆成多个 evaluate。
+- 只有返回 `ok: true` 才能更新台账并沿 `nextHref` 前进；返回 `ok: false` 时记录 `errors`，重新定位页面结构，不得猜测字段或重复读取同一页面身份。
+- `complete: true` 只证明当前页面没有可用 Next；集合完成还必须满足工作流的总数与去重台账条件。
+
 ## 循环动作
 
 1. 先把日期上下界、订单状态、商品条件和运费口径写成固定筛选条件。
@@ -56,6 +63,71 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - grocery gourmet food > snacks sweets > snack foods：`/grocery-gourmet-food/snacks-sweets/snack-foods.html`
 - beauty personal care > hair care：`/beauty-personal-care/hair-care.html`
 - electronics > power accessories > ac adapters：`/electronics/power-accessories/ac-adapters.html`
+
+## 已验证批量读取结构
+
+这些 selector 来自已抓取页面；先在实时页面确认存在，再在一次 evaluate 中按卡片作用域提取字段。
+
+- 商品卡片：`li.product-item`；名称 `a.product-item-link`；价格 `.price-box .price`；链接 `a.product-item-link`
+- 分页：每页数量 `select[data-role='limiter']`；总数 `.toolbar-amount`；Next `.pages .pages-item-next > a.action.next`
+
+## 单次读取模板
+
+在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。
+
+```js
+() => {
+  const errors = [];
+  const rawCards = [...document.querySelectorAll("li.product-item")];
+  const cards = rawCards.filter(card =>
+    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)
+  );
+  const items = cards.map(card => {
+    const nameNode = card.querySelector("a.product-item-link");
+    const link = card.querySelector("a.product-item-link");
+    const priceText = card.querySelector(".price-box .price")?.textContent || "";
+    const priceMatch = priceText.replace(/,/g, "").match(/\d+(?:\.\d{1,2})?/);
+    return {
+      name: nameNode?.textContent.trim() || "",
+      price: priceMatch ? Number(priceMatch[0]) : null,
+      url: link?.href || ""
+    };
+  });
+  if (items.length === 0) errors.push("product-list-empty-or-selector-mismatch");
+  if (items.some(item => !item.name || !item.url || item.price === null)) {
+    errors.push("required-product-field-missing");
+  }
+  const next = document.querySelector(".pages .pages-item-next > a.action.next");
+  const nextDisabled = !next ||
+    next.matches("[disabled], .disabled, [aria-disabled=\"true\"]") ||
+    Boolean(next.closest(".disabled, [aria-disabled=\"true\"]"));
+  const nextHref = nextDisabled ? null : next.href || null;
+  const limiter = document.querySelector("select[data-role='limiter']");
+  const limiterOptions = limiter
+    ? [...limiter.options].map(option => option.value).filter(Boolean)
+    : [];
+  return {
+    actionId: "read_current_list_page_v1",
+    ok: errors.length === 0,
+    pageId: JSON.stringify({
+      url: location.href,
+      itemCount: items.length,
+      firstUrl: items[0]?.url || "",
+      lastUrl: items.at(-1)?.url || ""
+    }),
+    totalText: document.querySelector(".toolbar-amount")?.textContent.trim() || "",
+    rawCardCount: rawCards.length,
+    ignoredCardCount: rawCards.length - cards.length,
+    itemCount: items.length,
+    items,
+    nextHref,
+    complete: nextHref === null,
+    currentLimiterValue: limiter?.value || null,
+    limiterOptions,
+    errors
+  };
+}
+```
 
 ## 已验证结构
 
