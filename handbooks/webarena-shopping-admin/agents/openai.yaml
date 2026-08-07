@@ -1,0 +1,4 @@
+interface:
+  display_name: "webarena-shopping-admin"
+  short_description: "webarena-shopping-admin 的精确浏览器操作指南"
+  default_prompt: "使用 $use-webarena-shopping-admin 和已验证的 selector 操作 webarena-shopping-admin。"

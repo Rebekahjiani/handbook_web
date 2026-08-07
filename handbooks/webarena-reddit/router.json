@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "router": "use-webarena-reddit-router",
+  "site": {
+    "key": "webarena-reddit",
+    "name": "webarena-reddit",
+    "origin": "http://localhost:9999"
+  },
+  "routes": [
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "cross-site-post",
+      "priority": 0,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "gitlab|gimmiethat\\.space|OneStopShop|byteblaze|koush|auth0|lahwaacz|promote\\s+\\w+\\/\\w+|create.*folder.*\\brepo\\b|make.*folder.*\\brepo\\b|create\\s+a\\s+repository\\s+named|make\\s+a\\s+(?:folder|repository)\\s+named.*\\brepo\\b|gitlabΨ",
+      "skill_file": "runtime-skills/cross-site-post/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "cross-site-post",
+      "reason": "跨站内容引用并发帖"
+    },
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "forum-create",
+      "priority": 1,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+named|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+named",
+      "skill_file": "runtime-skills/forum-create/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "forum-create",
+      "reason": "创建新论坛（Subreddit）"
+    },
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "post-create",
+      "priority": 2,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\bpost\\s+(?:a|my|in|to|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)",
+      "skill_file": "runtime-skills/post-create/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "post-create",
+      "reason": "在 Subreddit 中发布新帖"
+    },
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "post-reply",
+      "priority": 3,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b",
+      "skill_file": "runtime-skills/post-reply/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "post-reply",
+      "reason": "回复帖子或评论"
+    },
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "subscribe",
+      "priority": 4,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\bsubscribe\\b|\\bfollow\\s+(?:a\\s+)?(?:forum|subreddit|thread|post)\\b",
+      "skill_file": "runtime-skills/subscribe/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "subscribe",
+      "reason": "订阅论坛或帖子"
+    },
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "read-post",
+      "priority": 5,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:tell me|show me|find|list|count|read|get|return|how many|what|which|among the top)\\b",
+      "skill_file": "runtime-skills/read-post/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "read-post",
+      "reason": "浏览、搜索与读取帖子内容"
+    },
+    {
+      "site_keys": [
+        "webarena-reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "other",
+      "priority": 6,
+      "backoff": false,
+      "fallback": true,
+      "intent_pattern": ".*",
+      "skill_file": "runtime-skills/other/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "other",
+      "reason": "未归类任务"
+    }
+  ]
+}

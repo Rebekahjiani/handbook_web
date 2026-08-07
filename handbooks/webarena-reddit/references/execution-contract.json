@@ -1,0 +1,320 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-07T01:48:11.660Z",
+  "site": {
+    "key": "webarena-reddit",
+    "name": "webarena-reddit",
+    "origin": "http://localhost:9999"
+  },
+  "router": "use-webarena-reddit-router",
+  "workflows": {
+    "cross-site-post": {
+      "workflow": "cross-site-post",
+      "title": "跨站内容引用并发帖",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/cross-site-post/SKILL.md",
+      "intentPattern": "gitlab|gimmiethat\\.space|OneStopShop|byteblaze|koush|auth0|lahwaacz|promote\\s+\\w+\\/\\w+|create.*folder.*\\brepo\\b|make.*folder.*\\brepo\\b|create\\s+a\\s+repository\\s+named|make\\s+a\\s+(?:folder|repository)\\s+named.*\\brepo\\b|gitlabΨ",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "forum-create": {
+      "workflow": "forum-create",
+      "title": "创建新论坛（Subreddit）",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/forum-create/SKILL.md",
+      "intentPattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+named|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+named",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "post-create": {
+      "workflow": "post-create",
+      "title": "在 Subreddit 中发布新帖",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/post-create/SKILL.md",
+      "intentPattern": "\\bpost\\s+(?:a|my|in|to|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "post-reply": {
+      "workflow": "post-reply",
+      "title": "回复帖子或评论",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/post-reply/SKILL.md",
+      "intentPattern": "\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "subscribe": {
+      "workflow": "subscribe",
+      "title": "订阅论坛或帖子",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/subscribe/SKILL.md",
+      "intentPattern": "\\bsubscribe\\b|\\bfollow\\s+(?:a\\s+)?(?:forum|subreddit|thread|post)\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "read-post": {
+      "workflow": "read-post",
+      "title": "浏览、搜索与读取帖子内容",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/read-post/SKILL.md",
+      "intentPattern": "\\b(?:tell me|show me|find|list|count|read|get|return|how many|what|which|among the top)\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "other": {
+      "workflow": "other",
+      "title": "未归类任务",
+      "siteKeys": [
+        "webarena-reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/other/SKILL.md",
+      "intentPattern": ".*",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    }
+  }
+}

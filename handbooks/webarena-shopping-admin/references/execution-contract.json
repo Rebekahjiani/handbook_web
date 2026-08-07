@@ -1,0 +1,320 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-07T01:56:36.292Z",
+  "site": {
+    "key": "shopping_admin",
+    "name": "webarena-shopping-admin",
+    "origin": "http://localhost:7780"
+  },
+  "router": "use-webarena-shopping-admin-router",
+  "workflows": {
+    "admin-report": {
+      "workflow": "admin-report",
+      "title": "销售报表与聚合统计",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/admin-report/SKILL.md",
+      "intentPattern": "best.?selling|top.?\\d|revenue|total.*sold|items? sold|sales.*report|best.*brand|best.*product type",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "admin-product-edit": {
+      "workflow": "admin-product-edit",
+      "title": "商品属性编辑与状态管理",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/admin-product-edit/SKILL.md",
+      "intentPattern": "(?:reduce|increase)\\s+(?:the\\s+)?price|(?:disable|enable)\\s+\\w|mark\\s+all\\s+\\w|(?:update|change|set)\\s+(?:the\\s+|all\\s+)?(?:\\w+\\s+)*(?:price|description|stock|out.?of.?stock|status|on.?sale|attribute|SKU)|set.*on.?sale",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "admin-customer": {
+      "workflow": "admin-customer",
+      "title": "客户信息查询与管理",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/admin-customer/SKILL.md",
+      "intentPattern": "customer(?:\\s+\\w+){0,3}\\s+(?:email|name|group|address|account)|(?:list|view|return|get)\\s+(?:all\\s+)?customers?(?:\\s|$)|view.*details.*(?:all\\s+)?customers?",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "read-content": {
+      "workflow": "read-content",
+      "title": "读取列表、详情与结构化数据",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/read-content/SKILL.md",
+      "intentPattern": "\\b(?:get|return|list|show|summarize|what(?:'s| is)|how many|find out|read|retrieve|give me)\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "edit-submit": {
+      "workflow": "edit-submit",
+      "title": "创建、修改与提交",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/edit-submit/SKILL.md",
+      "intentPattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "navigation": {
+      "workflow": "navigation",
+      "title": "页面导航",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/navigation/SKILL.md",
+      "intentPattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    },
+    "other": {
+      "workflow": "other",
+      "title": "未归类任务",
+      "siteKeys": [
+        "shopping_admin"
+      ],
+      "origin": "http://localhost:7780",
+      "skillFile": "runtime-skills/other/SKILL.md",
+      "intentPattern": ".*",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      }
+    }
+  }
+}
