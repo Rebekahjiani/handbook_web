@@ -6,8 +6,8 @@
 
 ## 推荐流程
 
-1. 进入 reddit 首页，找到「Create a Forum」或「Create Community」入口。
-2. 填写论坛名称（name）和描述（description）。
+1. 进入 reddit 首页，点击「Create a Forum」或右上角用户菜单中的创建入口。
+2. 填写论坛名称（name/title）和描述（description）。
 3. 按任务要求添加 sidebar 标签（tags/flairs）。
 4. 提交创建，确认论坛主页已出现。
 

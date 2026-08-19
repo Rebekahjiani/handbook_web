@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-07T01:48:11.660Z",
+  "generatedAt": "2026-08-12T02:06:46.208Z",
   "site": {
-    "key": "webarena-reddit",
+    "key": "reddit",
     "name": "webarena-reddit",
     "origin": "http://localhost:9999"
   },
@@ -12,7 +12,7 @@
       "workflow": "cross-site-post",
       "title": "跨站内容引用并发帖",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/cross-site-post/SKILL.md",
@@ -27,6 +27,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -45,22 +49,96 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "cross-site-post",
+          "intentPattern": "gitlab|gimmiethat\\.space|OneStopShop|byteblaze|koush|auth0|lahwaacz|promote\\s+\\w+\\/\\w+|create.*folder.*\\brepo\\b|make.*folder.*\\brepo\\b|create\\s+a\\s+repository\\s+named|make\\s+a\\s+(?:folder|repository)\\s+named.*\\brepo\\b|gitlabΨ",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "cross-site-post",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "cross-site-post",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "forum-create": {
       "workflow": "forum-create",
       "title": "创建新论坛（Subreddit）",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/forum-create/SKILL.md",
-      "intentPattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+named|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+named",
+      "intentPattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+(?:named|with\\s+name)|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+(?:named|with\\s+name)",
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
@@ -71,12 +149,94 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "open-create-form",
+          "fill-and-verify",
+          "submit-once",
+          "verify-created-forum"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/create_forum$",
+            "status": 302
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/create_forum$",
+          "semanticTarget": "forum",
+          "direction": "create",
+          "postState": "created_forum_visible"
+        },
+        "contractCoverage": "target_event_specified",
+        "forms": [
+          {
+            "pageUrl": "http://localhost:9999/create_forum",
+            "evidence": "site-adapter-form-contract",
+            "action": "http://localhost:9999/create_forum",
+            "method": "post",
+            "selector": "form[action='/create_forum']",
+            "fields": [
+              {
+                "name": "forum[name]",
+                "type": "text",
+                "required": true
+              },
+              {
+                "name": "forum[title]",
+                "type": "text",
+                "required": true
+              },
+              {
+                "name": "forum[description]",
+                "type": "textarea",
+                "required": true
+              },
+              {
+                "name": "forum[sidebar]",
+                "type": "textarea",
+                "required": true
+              }
+            ],
+            "submitButtons": [
+              {
+                "name": "Create",
+                "type": "submit"
+              }
+            ],
+            "confirmations": [],
+            "postcondition": "GET /f/<forum_name> and read title, description, and sidebar text",
+            "requiredNetworkEvent": {
+              "method": "POST",
+              "urlPattern": "/create_forum$",
+              "status": 302
+            },
+            "repeatability": "无 reset 时必须使用任务外唯一名称做隔离试跑；正式评测任务先 GET /f/<name> 探测，已存在则标记状态污染，不把编辑页当作创建成功。"
+          }
+        ]
       },
       "actions": [],
       "finalStateGate": {
@@ -89,22 +249,153 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "forum-create",
+          "intentPattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+(?:named|with\\s+name)|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+(?:named|with\\s+name)",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "forum-create",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [
+            {
+              "pageUrl": "http://localhost:9999/create_forum",
+              "evidence": "site-adapter-form-contract",
+              "action": "http://localhost:9999/create_forum",
+              "method": "post",
+              "selector": "form[action='/create_forum']",
+              "fields": [
+                {
+                  "name": "forum[name]",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "name": "forum[title]",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "name": "forum[description]",
+                  "type": "textarea",
+                  "required": true
+                },
+                {
+                  "name": "forum[sidebar]",
+                  "type": "textarea",
+                  "required": true
+                }
+              ],
+              "submitButtons": [
+                {
+                  "name": "Create",
+                  "type": "submit"
+                }
+              ],
+              "confirmations": [],
+              "postcondition": "GET /f/<forum_name> and read title, description, and sidebar text",
+              "requiredNetworkEvent": {
+                "method": "POST",
+                "urlPattern": "/create_forum$",
+                "status": 302
+              },
+              "repeatability": "无 reset 时必须使用任务外唯一名称做隔离试跑；正式评测任务先 GET /f/<name> 探测，已存在则标记状态污染，不把编辑页当作创建成功。"
+            }
+          ],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/create_forum$",
+            "status": 302
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/create_forum$",
+          "semanticTarget": "forum",
+          "direction": "create",
+          "postState": "created_forum_visible"
+        },
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "forum-create",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "post-create": {
       "workflow": "post-create",
       "title": "在 Subreddit 中发布新帖",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/post-create/SKILL.md",
-      "intentPattern": "\\bpost\\s+(?:a|my|in|to|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)",
+      "intentPattern": "^(?![\\s\\S]*\\bcreate\\s+(?:a\\s+)?(?:new\\s+)?forum\\b)(?![\\s\\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\\.space))[\\s\\S]*(?:\\bpost\\s+(?:a|my|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)|\\bpost\\s+my\\s+question\\b)",
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
@@ -115,12 +406,49 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "open-create-form",
+          "fill-and-verify",
+          "submit-once",
+          "verify-created-object"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/submit(?:/[^/]+)?$"
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/submit(?:/[^/]+)?$",
+          "semanticTarget": "post",
+          "direction": "create",
+          "postState": "created_post_visible"
+        },
+        "contractCoverage": "target_event_specified",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -133,22 +461,108 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "post-create",
+          "intentPattern": "^(?![\\s\\S]*\\bcreate\\s+(?:a\\s+)?(?:new\\s+)?forum\\b)(?![\\s\\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\\.space))[\\s\\S]*(?:\\bpost\\s+(?:a|my|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)|\\bpost\\s+my\\s+question\\b)",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "post-create",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/submit(?:/[^/]+)?$"
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/submit(?:/[^/]+)?$",
+          "semanticTarget": "post",
+          "direction": "create",
+          "postState": "created_post_visible"
+        },
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "post-create",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "post-reply": {
       "workflow": "post-reply",
       "title": "回复帖子或评论",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/post-reply/SKILL.md",
-      "intentPattern": "\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b",
+      "intentPattern": "^(?![\\s\\S]*\\bthen\\s+comment\\b)[\\s\\S]*(?:\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b)",
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
@@ -159,12 +573,50 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "open-reply-form",
+          "fill-and-verify",
+          "submit-once",
+          "verify-reply"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/f/[^/]+/[^/]+/-/comment$"
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/f/[^/]+/[^/]+/-/comment$",
+          "semanticTarget": "comment",
+          "direction": "create",
+          "postState": "reply_visible_under_target"
+        },
+        "contractCoverage": "target_event_specified",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -177,18 +629,497 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "post-reply",
+          "intentPattern": "^(?![\\s\\S]*\\bthen\\s+comment\\b)[\\s\\S]*(?:\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b)",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "post-reply",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/f/[^/]+/[^/]+/-/comment$"
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/f/[^/]+/[^/]+/-/comment$",
+          "semanticTarget": "comment",
+          "direction": "create",
+          "postState": "reply_visible_under_target"
+        },
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "post-reply",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
+      }
+    },
+    "vote": {
+      "workflow": "vote",
+      "title": "投票（点赞 / 踩）",
+      "siteKeys": [
+        "reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/vote/SKILL.md",
+      "intentPattern": "\\bupvote\\s+(?:the\\s+)?(?:newest|latest|top|\\d+\\s+)?\\w*\\s*post\\b|\\bdownvote\\b|\\bthumb[s]?\\s+(?:up|down)\\b|\\blike\\s+all\\b|\\bdislike\\s+all\\b|\\blike\\s+(?:all\\s+)?submissions?\\b|\\bdislike\\s+(?:all\\s+)?submissions?\\b|\\blike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b|\\bdislike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "single-vote-action",
+          "verify-vote-state"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/(?:sv|f/[^/]+/[^/]+/-/(?:upvote|downvote))"
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/(?:sv|f/[^/]+/[^/]+/-/(?:upvote|downvote))",
+          "semanticTarget": "vote",
+          "direction": "task_vote_direction",
+          "postState": "vote_control_active"
+        },
+        "contractCoverage": "target_event_specified",
+        "forms": []
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "vote",
+          "intentPattern": "\\bupvote\\s+(?:the\\s+)?(?:newest|latest|top|\\d+\\s+)?\\w*\\s*post\\b|\\bdownvote\\b|\\bthumb[s]?\\s+(?:up|down)\\b|\\blike\\s+all\\b|\\bdislike\\s+all\\b|\\blike\\s+(?:all\\s+)?submissions?\\b|\\bdislike\\s+(?:all\\s+)?submissions?\\b|\\blike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b|\\bdislike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "vote",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/(?:sv|f/[^/]+/[^/]+/-/(?:upvote|downvote))"
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/(?:sv|f/[^/]+/[^/]+/-/(?:upvote|downvote))",
+          "semanticTarget": "vote",
+          "direction": "task_vote_direction",
+          "postState": "vote_control_active"
+        },
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "vote",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
+      }
+    },
+    "user-edit": {
+      "workflow": "user-edit",
+      "title": "编辑个人资料或自己的帖子",
+      "siteKeys": [
+        "reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "skillFile": "runtime-skills/user-edit/SKILL.md",
+      "intentPattern": "\\b(?:change|update|set|edit)\\s+my\\s+(?:reddit\\s+)?bio\\b|\\bedit\\s+my\\s+post\\b|\\bedit\\s+my\\s+(?:post\\s+)?on\\b",
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "open-edit-form",
+          "fill-and-verify",
+          "submit-once",
+          "verify-profile"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/user/MarvelsGrantMan136/edit_biography$",
+            "status": 302
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/user/[^/]+/edit_biography$",
+          "semanticTarget": "user_biography",
+          "direction": "update",
+          "postState": "biography_equals_task_value"
+        },
+        "contractCoverage": "target_event_specified",
+        "forms": [
+          {
+            "pageUrl": "http://localhost:9999/user/MarvelsGrantMan136/edit_biography",
+            "evidence": "site-adapter-form-contract",
+            "action": "http://localhost:9999/user/MarvelsGrantMan136/edit_biography",
+            "method": "post",
+            "selector": "form[action$='/edit_biography']",
+            "fields": [
+              {
+                "name": "user_biography[biography]",
+                "type": "textarea",
+                "required": true
+              }
+            ],
+            "submitButtons": [
+              {
+                "name": "Save",
+                "type": "submit"
+              }
+            ],
+            "confirmations": [],
+            "postcondition": "GET user profile or edit page and verify biography text exactly",
+            "requiredNetworkEvent": {
+              "method": "POST",
+              "urlPattern": "/user/MarvelsGrantMan136/edit_biography$",
+              "status": 302
+            },
+            "repeatability": "无 reset 时使用带 run id 的临时 bio 做隔离验证；正式任务写入前先读取当前 bio，写后 GET 用户页确认目标文本。"
+          }
+        ]
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "user-edit",
+          "intentPattern": "\\b(?:change|update|set|edit)\\s+my\\s+(?:reddit\\s+)?bio\\b|\\bedit\\s+my\\s+post\\b|\\bedit\\s+my\\s+(?:post\\s+)?on\\b",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "user-edit",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [
+            {
+              "pageUrl": "http://localhost:9999/user/MarvelsGrantMan136/edit_biography",
+              "evidence": "site-adapter-form-contract",
+              "action": "http://localhost:9999/user/MarvelsGrantMan136/edit_biography",
+              "method": "post",
+              "selector": "form[action$='/edit_biography']",
+              "fields": [
+                {
+                  "name": "user_biography[biography]",
+                  "type": "textarea",
+                  "required": true
+                }
+              ],
+              "submitButtons": [
+                {
+                  "name": "Save",
+                  "type": "submit"
+                }
+              ],
+              "confirmations": [],
+              "postcondition": "GET user profile or edit page and verify biography text exactly",
+              "requiredNetworkEvent": {
+                "method": "POST",
+                "urlPattern": "/user/MarvelsGrantMan136/edit_biography$",
+                "status": 302
+              },
+              "repeatability": "无 reset 时使用带 run id 的临时 bio 做隔离验证；正式任务写入前先读取当前 bio，写后 GET 用户页确认目标文本。"
+            }
+          ],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/user/MarvelsGrantMan136/edit_biography$",
+            "status": 302
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/user/[^/]+/edit_biography$",
+          "semanticTarget": "user_biography",
+          "direction": "update",
+          "postState": "biography_equals_task_value"
+        },
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "user-edit",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "subscribe": {
       "workflow": "subscribe",
       "title": "订阅论坛或帖子",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/subscribe/SKILL.md",
@@ -203,12 +1134,79 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "single-subscribe-action",
+          "verify-subscribe-state"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/f/[^/]+/subscribe\\.json$",
+            "responseContent": {
+              "subscribed": true
+            }
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/f/[^/]+/subscribe\\.json$",
+          "semanticTarget": "subscription",
+          "direction": "subscribe",
+          "responseContent": {
+            "subscribed": true
+          },
+          "postState": "subscribed_true"
+        },
+        "contractCoverage": "target_event_specified",
+        "forms": [
+          {
+            "pageUrl": "http://localhost:9999/f/<forum>/<post>",
+            "evidence": "site-adapter-form-contract",
+            "action": "http://localhost:9999/f/<forum>/subscribe.json",
+            "method": "post",
+            "selector": "form[action$='/subscribe.json'], button:has-text('Subscribe')",
+            "fields": [],
+            "submitButtons": [
+              {
+                "name": "Subscribe",
+                "type": "submit"
+              }
+            ],
+            "confirmations": [],
+            "postcondition": "write POST, then GET target forum/post and verify subscribed state",
+            "requiredNetworkEvent": {
+              "method": "POST",
+              "urlPattern": "/f/[^/]+/subscribe\\.json$",
+              "responseContent": {
+                "subscribed": true
+              }
+            },
+            "repeatability": "无 reset 时按任务族单独统计；先 GET 目标 forum/post 读取当前订阅状态，若已订阅则记录 pre-existing，不把该题混入可重复准确率。"
+          }
+        ]
       },
       "actions": [],
       "finalStateGate": {
@@ -221,18 +1219,143 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "subscribe",
+          "intentPattern": "\\bsubscribe\\b|\\bfollow\\s+(?:a\\s+)?(?:forum|subreddit|thread|post)\\b",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "forum_or_post_subscription",
+          "identity": {
+            "forum": "task_forum",
+            "post": "task_post_if_specified"
+          },
+          "desiredState": {
+            "subscribed": true
+          }
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.subscription_control",
+            "values": [
+              "subscribed",
+              "unsubscribed"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [
+            {
+              "pageUrl": "http://localhost:9999/f/<forum>/<post>",
+              "evidence": "site-adapter-form-contract",
+              "action": "http://localhost:9999/f/<forum>/subscribe.json",
+              "method": "post",
+              "selector": "form[action$='/subscribe.json'], button:has-text('Subscribe')",
+              "fields": [],
+              "submitButtons": [
+                {
+                  "name": "Subscribe",
+                  "type": "submit"
+                }
+              ],
+              "confirmations": [],
+              "postcondition": "write POST, then GET target forum/post and verify subscribed state",
+              "requiredNetworkEvent": {
+                "method": "POST",
+                "urlPattern": "/f/[^/]+/subscribe\\.json$",
+                "responseContent": {
+                  "subscribed": true
+                }
+              },
+              "repeatability": "无 reset 时按任务族单独统计；先 GET 目标 forum/post 读取当前订阅状态，若已订阅则记录 pre-existing，不把该题混入可重复准确率。"
+            }
+          ],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [
+          {
+            "method": "POST",
+            "urlPattern": "/f/[^/]+/subscribe\\.json$",
+            "responseContent": {
+              "subscribed": true
+            }
+          }
+        ],
+        "expectedMutation": {
+          "method": "POST",
+          "endpointPattern": "/f/[^/]+/subscribe\\.json$",
+          "semanticTarget": "subscription",
+          "direction": "subscribe",
+          "responseContent": {
+            "subscribed": true
+          },
+          "postState": "subscribed_true"
+        },
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "forum_or_post_subscription",
+            "identity": {
+              "forum": "task_forum",
+              "post": "task_post_if_specified"
+            },
+            "desiredState": {
+              "subscribed": true
+            }
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "read-post": {
       "workflow": "read-post",
       "title": "浏览、搜索与读取帖子内容",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/read-post/SKILL.md",
@@ -247,6 +1370,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -265,18 +1392,92 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "read-post",
+          "intentPattern": "\\b(?:tell me|show me|find|list|count|read|get|return|how many|what|which|among the top)\\b",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "read-post",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "read-post",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "other": {
       "workflow": "other",
       "title": "未归类任务",
       "siteKeys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin": "http://localhost:9999",
       "skillFile": "runtime-skills/other/SKILL.md",
@@ -291,6 +1492,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -309,12 +1514,433 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "other",
+          "intentPattern": ".*",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999"
+        },
+        "target": {
+          "entity": "other",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "other",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
+    }
+  },
+  "sequences": {
+    "post-create-then-reply": {
+      "workflow": "post-create-then-reply",
+      "title": "创建帖子并回复创建的帖子",
+      "siteKeys": [
+        "reddit"
+      ],
+      "origin": "http://localhost:9999",
+      "stages": [
+        {
+          "workflow": "post-create",
+          "title": "在 Subreddit 中发布新帖",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999",
+          "skillFile": "runtime-skills/post-create/SKILL.md",
+          "intentPattern": "^(?![\\s\\S]*\\bcreate\\s+(?:a\\s+)?(?:new\\s+)?forum\\b)(?![\\s\\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\\.space))[\\s\\S]*(?:\\bpost\\s+(?:a|my|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)|\\bpost\\s+my\\s+question\\b)",
+          "enforcement": {
+            "mode": "runtime",
+            "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+          },
+          "allowedActions": [
+            "verify_final_state_v1"
+          ],
+          "forbiddenActions": [],
+          "budgets": {
+            "finalStateGateRequiredBeforeSuccess": true,
+            "maxConsecutiveSameAction": 2,
+            "recoveryAttemptsMax": 2,
+            "maxListPages": null,
+            "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+            "listReadMaxCallsPerPageId": null,
+            "customListEvaluateMaxCalls": null,
+            "supplementalQueriesMax": 0,
+            "supplementalQueryAllowedOnlyWhen": null,
+            "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+            "broadCategoryDetoursForBrandFilterMax": null
+          },
+          "mutation": {
+            "kind": "browser.mutate",
+            "phases": [
+              "open-create-form",
+              "fill-and-verify",
+              "submit-once",
+              "verify-created-object"
+            ],
+            "submitMaxCalls": 1,
+            "requireExactTaskValues": true,
+            "requireCurrentFormAction": true,
+            "requirePostSubmitRead": true,
+            "requireNetworkMutationEvent": true,
+            "networkEventExcludePathPatterns": [
+              "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+            ],
+            "compoundTaskRequiresAllPhases": true,
+            "requiredNetworkEvents": [
+              {
+                "method": "POST",
+                "urlPattern": "/submit(?:/[^/]+)?$"
+              }
+            ],
+            "expectedMutation": {
+              "method": "POST",
+              "endpointPattern": "/submit(?:/[^/]+)?$",
+              "semanticTarget": "post",
+              "direction": "create",
+              "postState": "created_post_visible"
+            },
+            "contractCoverage": "target_event_specified",
+            "forms": []
+          },
+          "actions": [],
+          "finalStateGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "ir": {
+            "schemaVersion": 2,
+            "route": {
+              "workflow": "post-create",
+              "intentPattern": "^(?![\\s\\S]*\\bcreate\\s+(?:a\\s+)?(?:new\\s+)?forum\\b)(?![\\s\\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\\.space))[\\s\\S]*(?:\\bpost\\s+(?:a|my|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)|\\bpost\\s+my\\s+question\\b)",
+              "siteKeys": [
+                "reddit"
+              ],
+              "origin": "http://localhost:9999"
+            },
+            "target": {
+              "entity": "post-create",
+              "identity": "task-target",
+              "desiredState": "task-success"
+            },
+            "preconditions": [
+              "site_origin_matches",
+              "task_values_preserved"
+            ],
+            "observation": {
+              "currentState": {
+                "source": "browser.page",
+                "required": true,
+                "fields": [
+                  "url",
+                  "title",
+                  "targetObjectText"
+                ]
+              }
+            },
+            "page": {
+              "routeHints": [],
+              "structures": [],
+              "forms": [],
+              "visualAnchors": []
+            },
+            "allowedActions": [
+              "browser.mutate",
+              "verify_final_state_v1"
+            ],
+            "requiredNetworkEvents": [
+              {
+                "method": "POST",
+                "urlPattern": "/submit(?:/[^/]+)?$"
+              }
+            ],
+            "expectedMutation": {
+              "method": "POST",
+              "endpointPattern": "/submit(?:/[^/]+)?$",
+              "semanticTarget": "post",
+              "direction": "create",
+              "postState": "created_post_visible"
+            },
+            "postStateGate": {
+              "lifecycleGate": {
+                "actionId": "verify_final_state_v1",
+                "kind": "cdp.readCurrentPageState",
+                "requiredBefore": "SUCCESS",
+                "requiredFields": [
+                  "url",
+                  "title",
+                  "h1OrTargetObjectText"
+                ],
+                "assertions": [
+                  "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+                  "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+                  "The current page title or target object text must prove the requested object identity.",
+                  "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+                  "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+                ]
+              },
+              "targetGate": {
+                "entity": "post-create",
+                "identity": "task-target",
+                "desiredState": "task-success"
+              }
+            },
+            "successContract": {
+              "requiredStatus": "SUCCESS",
+              "lifecycleGate": "verify_final_state_v1",
+              "targetGate": "target_identity_verified",
+              "mutationGate": "correct_target_mutation",
+              "postStateGate": "post_state_verified"
+            }
+          }
+        },
+        {
+          "workflow": "post-reply",
+          "title": "回复帖子或评论",
+          "siteKeys": [
+            "reddit"
+          ],
+          "origin": "http://localhost:9999",
+          "skillFile": "runtime-skills/post-reply/SKILL.md",
+          "intentPattern": "^(?![\\s\\S]*\\bthen\\s+comment\\b)[\\s\\S]*(?:\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b)",
+          "enforcement": {
+            "mode": "runtime",
+            "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+          },
+          "allowedActions": [
+            "verify_final_state_v1"
+          ],
+          "forbiddenActions": [],
+          "budgets": {
+            "finalStateGateRequiredBeforeSuccess": true,
+            "maxConsecutiveSameAction": 2,
+            "recoveryAttemptsMax": 2,
+            "maxListPages": null,
+            "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+            "listReadMaxCallsPerPageId": null,
+            "customListEvaluateMaxCalls": null,
+            "supplementalQueriesMax": 0,
+            "supplementalQueryAllowedOnlyWhen": null,
+            "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+            "broadCategoryDetoursForBrandFilterMax": null
+          },
+          "mutation": {
+            "kind": "browser.mutate",
+            "phases": [
+              "identify-target",
+              "open-reply-form",
+              "fill-and-verify",
+              "submit-once",
+              "verify-reply"
+            ],
+            "submitMaxCalls": 1,
+            "requireExactTaskValues": true,
+            "requireCurrentFormAction": true,
+            "requirePostSubmitRead": true,
+            "requireNetworkMutationEvent": true,
+            "networkEventExcludePathPatterns": [
+              "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+            ],
+            "compoundTaskRequiresAllPhases": true,
+            "requiredNetworkEvents": [
+              {
+                "method": "POST",
+                "urlPattern": "/f/[^/]+/[^/]+/-/comment$"
+              }
+            ],
+            "expectedMutation": {
+              "method": "POST",
+              "endpointPattern": "/f/[^/]+/[^/]+/-/comment$",
+              "semanticTarget": "comment",
+              "direction": "create",
+              "postState": "reply_visible_under_target"
+            },
+            "contractCoverage": "target_event_specified",
+            "forms": []
+          },
+          "actions": [],
+          "finalStateGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "ir": {
+            "schemaVersion": 2,
+            "route": {
+              "workflow": "post-reply",
+              "intentPattern": "^(?![\\s\\S]*\\bthen\\s+comment\\b)[\\s\\S]*(?:\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b)",
+              "siteKeys": [
+                "reddit"
+              ],
+              "origin": "http://localhost:9999"
+            },
+            "target": {
+              "entity": "post-reply",
+              "identity": "task-target",
+              "desiredState": "task-success"
+            },
+            "preconditions": [
+              "site_origin_matches",
+              "task_values_preserved"
+            ],
+            "observation": {
+              "currentState": {
+                "source": "browser.page",
+                "required": true,
+                "fields": [
+                  "url",
+                  "title",
+                  "targetObjectText"
+                ]
+              }
+            },
+            "page": {
+              "routeHints": [],
+              "structures": [],
+              "forms": [],
+              "visualAnchors": []
+            },
+            "allowedActions": [
+              "browser.mutate",
+              "verify_final_state_v1"
+            ],
+            "requiredNetworkEvents": [
+              {
+                "method": "POST",
+                "urlPattern": "/f/[^/]+/[^/]+/-/comment$"
+              }
+            ],
+            "expectedMutation": {
+              "method": "POST",
+              "endpointPattern": "/f/[^/]+/[^/]+/-/comment$",
+              "semanticTarget": "comment",
+              "direction": "create",
+              "postState": "reply_visible_under_target"
+            },
+            "postStateGate": {
+              "lifecycleGate": {
+                "actionId": "verify_final_state_v1",
+                "kind": "cdp.readCurrentPageState",
+                "requiredBefore": "SUCCESS",
+                "requiredFields": [
+                  "url",
+                  "title",
+                  "h1OrTargetObjectText"
+                ],
+                "assertions": [
+                  "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+                  "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+                  "The current page title or target object text must prove the requested object identity.",
+                  "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+                  "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+                ]
+              },
+              "targetGate": {
+                "entity": "post-reply",
+                "identity": "task-target",
+                "desiredState": "task-success"
+              }
+            },
+            "successContract": {
+              "requiredStatus": "SUCCESS",
+              "lifecycleGate": "verify_final_state_v1",
+              "targetGate": "target_identity_verified",
+              "mutationGate": "correct_target_mutation",
+              "postStateGate": "post_state_verified"
+            }
+          }
+        }
+      ]
     }
   }
 }

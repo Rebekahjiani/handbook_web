@@ -5,10 +5,10 @@ description: webarena-shopping 的订单查找与已购商品属性工作流。
 
 # 运行规则
 
-- 保持一个短台账：目标、固定约束、已验证记录、未访问页。不要在执行中改变口径。
-- 每次分页只允许一次批量读取；记录页面身份，禁止重复访问同一页。
-- 达到成功判据后立即结束。任务协议要求 NOT_FOUND 时使用 `retrieved_data: null`，不要用空数组。
-- 不得把中断、缺少证据或空结果包装成 SUCCESS；不得回答或索取下一题。
+- 只执行当前路由；保持目标、硬约束和已验证证据台账，不改变任务口径。
+- 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
+- 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
+- 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
 
 # 订单查找与已购商品属性
 
@@ -29,13 +29,6 @@ description: webarena-shopping 的订单查找与已购商品属性工作流。
 - `accepted_records`：满足时间与状态条件的订单台账
 - `next_href`：唯一待访问的下一页；无下一页时为 `null`
 
-## 硬执行契约
-
-- `read_current_list_page_v1` 是当前商品列表页唯一允许的列表读取动作。
-- 对每个页面身份只调用一次 evaluate，并完整执行下方模板；不得先用 snapshot/find 逐卡观察，也不得把模板拆成多个 evaluate。
-- 只有返回 `ok: true` 才能更新台账并沿 `nextHref` 前进；返回 `ok: false` 时记录 `errors`，重新定位页面结构，不得猜测字段或重复读取同一页面身份。
-- `complete: true` 只证明当前页面没有可用 Next；集合完成还必须满足工作流的总数与去重台账条件。
-
 ## 循环动作
 
 1. 先判定任务是单对象查找还是集合查找；进入订单历史并把每页行数据一次性读取为短台账，记录页面身份、行数与 Next。
@@ -54,86 +47,17 @@ description: webarena-shopping 的订单查找与已购商品属性工作流。
 - 无匹配时导航回不带分页参数的订单历史首页，并返回 NOT_FOUND 与 null。
 - 成功判据未被页面证据证明时继续；`next_action` 为空或动作开始重复时停止并进入失败恢复。
 
-## 已验证批量读取结构
-
-这些 selector 来自已抓取页面；先在实时页面确认存在，再在一次 evaluate 中按卡片作用域提取字段。
-
-- 商品卡片：`li.product-item`；名称 `a.product-item-link`；价格 `.price-box .price`；链接 `a.product-item-link`
-- 分页：每页数量 `select[data-role='limiter']`；总数 `.toolbar-amount`；Next `.pages .pages-item-next > a.action.next`
-
-## 单次读取模板
-
-在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。
-
-```js
-() => {
-  const errors = [];
-  const rawCards = [...document.querySelectorAll("li.product-item")];
-  const cards = rawCards.filter(card =>
-    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)
-  );
-  const items = cards.map(card => {
-    const nameNode = card.querySelector("a.product-item-link");
-    const link = card.querySelector("a.product-item-link");
-    const priceText = card.querySelector(".price-box .price")?.textContent || "";
-    const priceMatch = priceText.replace(/,/g, "").match(/\d+(?:\.\d{1,2})?/);
-    return {
-      name: nameNode?.textContent.trim() || "",
-      price: priceMatch ? Number(priceMatch[0]) : null,
-      url: link?.href || ""
-    };
-  });
-  if (items.length === 0) errors.push("product-list-empty-or-selector-mismatch");
-  if (items.some(item => !item.name || !item.url || item.price === null)) {
-    errors.push("required-product-field-missing");
-  }
-  const next = document.querySelector(".pages .pages-item-next > a.action.next");
-  const nextDisabled = !next ||
-    next.matches("[disabled], .disabled, [aria-disabled=\"true\"]") ||
-    Boolean(next.closest(".disabled, [aria-disabled=\"true\"]"));
-  const nextHref = nextDisabled ? null : next.href || null;
-  const limiter = document.querySelector("select[data-role='limiter']");
-  const limiterOptions = limiter
-    ? [...limiter.options].map(option => option.value).filter(Boolean)
-    : [];
-  return {
-    actionId: "read_current_list_page_v1",
-    ok: errors.length === 0,
-    pageId: JSON.stringify({
-      url: location.href,
-      itemCount: items.length,
-      firstUrl: items[0]?.url || "",
-      lastUrl: items.at(-1)?.url || ""
-    }),
-    totalText: document.querySelector(".toolbar-amount")?.textContent.trim() || "",
-    rawCardCount: rawCards.length,
-    ignoredCardCount: rawCards.length - cards.length,
-    itemCount: items.length,
-    items,
-    nextHref,
-    complete: nextHref === null,
-    currentLimiterValue: limiter?.value || null,
-    limiterOptions,
-    errors
-  };
-}
-```
-
 ## 已验证结构
 
 - `history-row`：`table#my-orders-table.history > tbody > tr`（history-table）
 - `history-purchase-date`：`:scope > td[data-th="Date"]`（history-row）
 - `history-grand-total`：`:scope > td[data-th="Order Total"] .price`（history-row）
 - `history-status`：`:scope > td[data-th="Status"]`（history-row）
-- `history-detail-link`：`:scope > td[data-th="Actions"] > a.action.view`（history-row）
-- `pagination-next`：`.pages .pages-item-next > a.action.next`（document）
-- `detail-grand-total`：`tr.grand_total > td.amount[data-th="Grand Total"] .price`（detail-totals）
 
 ## 最终状态闸门
 
-- 成功前的最后一次浏览器调用必须读取实时 `location.href + document.title`；最终答案只能描述这次读取到的状态。
-- NAVIGATE：将 location.href 与台账中记录的目标 URL 做字符串比较（含路径、query 参数和小数边界）；不一致时直接导航到台账 URL，再重新读取，不得以视觉近似替代字符串比较。
-- RETRIEVE：校验返回值的类型、字段集合和空值协议（NOT_FOUND → null，不是空数组）；证据不足时不得返回 SUCCESS。
+- 报告 SUCCESS 前，最后一次浏览器工具调用必须是 `localweb_browser_snapshot` 或 `localweb_browser_evaluate`；navigate/click 后必须再读取当前状态。
+- 按前置 Workflow IR 的 `postStateGate` 完成 URL、标题/目标对象和结果证据校验；闸门通过前不得报告 SUCCESS。
 
 ## 完成证明
 

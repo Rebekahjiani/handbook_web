@@ -112,5 +112,6 @@
       "contract_workflow": "other",
       "reason": "未归类任务"
     }
-  ]
+  ],
+  "sequences": []
 }

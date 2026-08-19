@@ -14,9 +14,9 @@
   "focusTaskCount": 0,
   "taskSeedsAvailable": 0,
   "taskSeedsQueued": 0,
-  "status": "completed",
+  "status": "rebuilt_from_snapshots",
   "startedAt": "2026-08-07T01:55:33.553Z",
-  "updatedAt": "2026-08-07T01:56:36.297Z",
+  "updatedAt": "2026-08-12T02:04:07.908Z",
   "pages": [
     {
       "url": "http://localhost:7780/admin/admin/dashboard/",
@@ -2092,6 +2092,8 @@
     "coveredWorkflows": 6,
     "workflowGaps": 0,
     "redirectsSkipped": 0,
-    "errors": 0
-  }
+    "errors": 0,
+    "executionContractActions": 0
+  },
+  "workflowConfig": "/Users/rebekah/handbook_web/generate-web-handbook/scripts/workflows/shopping-admin.mjs"
 }

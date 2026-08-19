@@ -2,14 +2,14 @@
   "schema_version": 1,
   "router": "use-webarena-reddit-router",
   "site": {
-    "key": "webarena-reddit",
+    "key": "reddit",
     "name": "webarena-reddit",
     "origin": "http://localhost:9999"
   },
   "routes": [
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "cross-site-post",
@@ -24,14 +24,14 @@
     },
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "forum-create",
       "priority": 1,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+named|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+named",
+      "intent_pattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+(?:named|with\\s+name)|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+(?:named|with\\s+name)",
       "skill_file": "runtime-skills/forum-create/SKILL.md",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "forum-create",
@@ -39,14 +39,14 @@
     },
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "post-create",
       "priority": 2,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "\\bpost\\s+(?:a|my|in|to|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)",
+      "intent_pattern": "^(?![\\s\\S]*\\bcreate\\s+(?:a\\s+)?(?:new\\s+)?forum\\b)(?![\\s\\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\\.space))[\\s\\S]*(?:\\bpost\\s+(?:a|my|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)|\\bpost\\s+my\\s+question\\b)",
       "skill_file": "runtime-skills/post-create/SKILL.md",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "post-create",
@@ -54,14 +54,14 @@
     },
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "post-reply",
       "priority": 3,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b",
+      "intent_pattern": "^(?![\\s\\S]*\\bthen\\s+comment\\b)[\\s\\S]*(?:\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b)",
       "skill_file": "runtime-skills/post-reply/SKILL.md",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "post-reply",
@@ -69,11 +69,41 @@
     },
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "vote",
+      "priority": 4,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\bupvote\\s+(?:the\\s+)?(?:newest|latest|top|\\d+\\s+)?\\w*\\s*post\\b|\\bdownvote\\b|\\bthumb[s]?\\s+(?:up|down)\\b|\\blike\\s+all\\b|\\bdislike\\s+all\\b|\\blike\\s+(?:all\\s+)?submissions?\\b|\\bdislike\\s+(?:all\\s+)?submissions?\\b|\\blike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b|\\bdislike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b",
+      "skill_file": "runtime-skills/vote/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "vote",
+      "reason": "投票（点赞 / 踩）"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "user-edit",
+      "priority": 5,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\b(?:change|update|set|edit)\\s+my\\s+(?:reddit\\s+)?bio\\b|\\bedit\\s+my\\s+post\\b|\\bedit\\s+my\\s+(?:post\\s+)?on\\b",
+      "skill_file": "runtime-skills/user-edit/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "user-edit",
+      "reason": "编辑个人资料或自己的帖子"
+    },
+    {
+      "site_keys": [
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "subscribe",
-      "priority": 4,
+      "priority": 6,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "\\bsubscribe\\b|\\bfollow\\s+(?:a\\s+)?(?:forum|subreddit|thread|post)\\b",
@@ -84,11 +114,11 @@
     },
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "read-post",
-      "priority": 5,
+      "priority": 7,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:tell me|show me|find|list|count|read|get|return|how many|what|which|among the top)\\b",
@@ -99,11 +129,11 @@
     },
     {
       "site_keys": [
-        "webarena-reddit"
+        "reddit"
       ],
       "origin_pattern": "^http://localhost:9999(?:/|$)",
       "route": "other",
-      "priority": 6,
+      "priority": 8,
       "backoff": false,
       "fallback": true,
       "intent_pattern": ".*",
@@ -111,6 +141,31 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "other",
       "reason": "未归类任务"
+    }
+  ],
+  "sequences": [
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "post-create-then-reply",
+      "priority": 0,
+      "intent_pattern": "\\bpost\\b[\\s\\S]*\\b(?:then|and then)\\b[\\s\\S]*\\b(?:comment|reply)\\b",
+      "workflows": [
+        "post-create",
+        "post-reply"
+      ],
+      "skill_files": [
+        "runtime-skills/post-create/SKILL.md",
+        "runtime-skills/post-reply/SKILL.md"
+      ],
+      "contract_file": "references/execution-contract.json",
+      "contract_workflows": [
+        "post-create",
+        "post-reply"
+      ],
+      "reason": "创建帖子并回复创建的帖子"
     }
   ]
 }

@@ -18,6 +18,8 @@
       "fallback": false,
       "intent_pattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
       "skill_file": "runtime-skills/order-aggregation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/order-aggregation.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "order-aggregation",
       "reason": "订单筛选、金额聚合与退款"
@@ -33,6 +35,8 @@
       "fallback": false,
       "intent_pattern": "\\borders?\\b|purchase (?:history|date)|(?:first|last|recent) purchase|purchase.*\\bdate\\b|bought|shipping method|billing address|arrival|delivery|cancelled|pending|processing",
       "skill_file": "runtime-skills/order-lookup/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/order-lookup.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "order-lookup",
       "reason": "订单查找与已购商品属性"
@@ -48,6 +52,8 @@
       "fallback": false,
       "intent_pattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
       "skill_file": "runtime-skills/reviews/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/reviews.json",
+      "runtime_mode": "contract_only",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "reviews",
       "reason": "商品详情与评论"
@@ -63,6 +69,8 @@
       "fallback": false,
       "intent_pattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
       "skill_file": "runtime-skills/account-forms/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/account-forms.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "account-forms",
       "reason": "账户、地址与表单"
@@ -78,6 +86,8 @@
       "fallback": false,
       "intent_pattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
       "skill_file": "runtime-skills/category-navigation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/category-navigation.json",
+      "runtime_mode": "contract_only",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "category-navigation",
       "reason": "分类页导航与价格过滤"
@@ -93,6 +103,8 @@
       "fallback": false,
       "intent_pattern": "price range|full names|available models|products from",
       "skill_file": "runtime-skills/catalog-aggregation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/catalog-aggregation.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "catalog-aggregation",
       "reason": "商品集合、名称与价格聚合"
@@ -108,6 +120,8 @@
       "fallback": false,
       "intent_pattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
       "skill_file": "runtime-skills/product-selection/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/product-selection.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "product-selection",
       "reason": "满足约束的最优商品选择"
@@ -123,6 +137,8 @@
       "fallback": false,
       "intent_pattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
       "skill_file": "runtime-skills/search-discovery/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/search-discovery.json",
+      "runtime_mode": "contract_only",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "search-discovery",
       "reason": "通用搜索、筛选与商品发现"
@@ -138,6 +154,8 @@
       "fallback": false,
       "intent_pattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
       "skill_file": "runtime-skills/read-content/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/read-content.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "read-content",
       "reason": "读取列表、详情与结构化数据"
@@ -153,6 +171,8 @@
       "fallback": false,
       "intent_pattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
       "skill_file": "runtime-skills/edit-submit/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/edit-submit.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "edit-submit",
       "reason": "创建、修改与提交"
@@ -168,6 +188,8 @@
       "fallback": false,
       "intent_pattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
       "skill_file": "runtime-skills/navigation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/navigation.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "navigation",
       "reason": "页面导航"
@@ -183,9 +205,12 @@
       "fallback": true,
       "intent_pattern": ".*",
       "skill_file": "runtime-skills/other/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/other.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "other",
       "reason": "未归类任务"
     }
-  ]
+  ],
+  "sequences": []
 }

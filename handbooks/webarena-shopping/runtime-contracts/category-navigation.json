@@ -1,0 +1,62 @@
+{
+  "workflow": "category-navigation",
+  "routeHints": [
+    {
+      "path": "/clothing-shoes-jewelry/men/shoes.html",
+      "label": "clothing shoes jewelry > men > shoes",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/clothing-shoes-jewelry/women/clothing.html",
+      "label": "clothing shoes jewelry > women > clothing",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+      "label": "office products > office furniture lighting > cabinets racks shelves",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/clothing-shoes-jewelry/women/shoes.html",
+      "label": "clothing shoes jewelry > women > shoes",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/beauty-personal-care/makeup/makeup-remover.html",
+      "label": "beauty personal care > makeup > makeup remover",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "label": "beauty personal care > oral care > children s dental care",
+      "terms": {},
+      "leafTerms": {}
+    }
+  ],
+  "target": {
+    "entity": "category_page",
+    "identity": "task-category",
+    "desiredState": "category_open"
+  },
+  "allowedActions": [
+    "read_current_list_page_v1",
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ],
+  "contractAction": {
+    "tool": "localweb_contract_action",
+    "actionId": "read_current_list_page_v1",
+    "route": "shopping",
+    "contractPath": "webarena-shopping/references/execution-contract.json",
+    "requiredFirstStep": true,
+    "call": "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。"
+  }
+}

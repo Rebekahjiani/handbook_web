@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-06T09:21:46.638Z",
+  "generatedAt": "2026-08-13T06:12:27.365Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -22,7 +22,7 @@
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "read_order_history_page_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
@@ -39,6 +39,10 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
@@ -46,52 +50,79 @@
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
       },
+      "preflightGuards": [
+        {
+          "id": "missing-past-months-window",
+          "when": {
+            "all": [
+              {
+                "field": "task.intent",
+                "contains": "past months"
+              },
+              {
+                "field": "task.intent",
+                "notMatches": "\\b\\d+\\b"
+              },
+              {
+                "field": "task.intent",
+                "notMatches": "\\b(?:from|between|after|before|since)\\b"
+              }
+            ]
+          },
+          "action": {
+            "type": "return_zero_value",
+            "responseSchema": "task.expected_response"
+          },
+          "before": "browser.navigation"
+        }
+      ],
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
+          "actionId": "read_order_history_page_v1",
           "kind": "browser.evaluate",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-order-history-page",
           "maxCallsPerPageId": 1,
           "selectors": {
-            "item": "li.product-item",
+            "row": "table#my-orders-table.history > tbody > tr",
             "fields": {
-              "name": "a.product-item-link",
-              "price": ".price-box .price",
-              "link": "a.product-item-link"
+              "orderNumber": ":scope > td[data-th=\"Order #\"]",
+              "purchaseDate": ":scope > td[data-th=\"Date\"]",
+              "grandTotal": ":scope > td[data-th=\"Order Total\"] .price",
+              "status": ":scope > td[data-th=\"Status\"]",
+              "detailLink": ":scope > td[data-th=\"Actions\"] > a.action.view"
             },
             "pagination": {
               "next": ".pages .pages-item-next > a.action.next",
-              "limiter": "select[data-role='limiter']",
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
+            "actionId": "read_order_history_page_v1",
             "requiredKeys": [
               "ok",
+              "evidenceStatus",
               "pageId",
               "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
               "itemCount",
-              "items",
+              "orders",
               "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
               "errors"
             ],
             "itemKeys": [
-              "name",
-              "price",
-              "url"
+              "orderNumber",
+              "purchaseDate",
+              "grandTotalText",
+              "status",
+              "detailUrl",
+              "evidenceStatus"
             ],
             "okWhen": [
               "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "itemCount equals orders.length",
+              "each order has identity, date, status and detail URL"
             ]
           }
         }
@@ -106,11 +137,86 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "order-aggregation",
+          "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "order_set",
+          "identity": "task-order-filter",
+          "desiredState": "evidence_complete"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "read_order_history_page_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "order_set",
+            "identity": "task-order-filter",
+            "desiredState": "evidence_complete"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "order-lookup": {
@@ -127,7 +233,7 @@
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "read_order_history_page_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
@@ -144,6 +250,10 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
@@ -153,50 +263,51 @@
       },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
+          "actionId": "read_order_history_page_v1",
           "kind": "browser.evaluate",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-order-history-page",
           "maxCallsPerPageId": 1,
           "selectors": {
-            "item": "li.product-item",
+            "row": "table#my-orders-table.history > tbody > tr",
             "fields": {
-              "name": "a.product-item-link",
-              "price": ".price-box .price",
-              "link": "a.product-item-link"
+              "orderNumber": ":scope > td[data-th=\"Order #\"]",
+              "purchaseDate": ":scope > td[data-th=\"Date\"]",
+              "grandTotal": ":scope > td[data-th=\"Order Total\"] .price",
+              "status": ":scope > td[data-th=\"Status\"]",
+              "detailLink": ":scope > td[data-th=\"Actions\"] > a.action.view"
             },
             "pagination": {
               "next": ".pages .pages-item-next > a.action.next",
-              "limiter": "select[data-role='limiter']",
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
+            "actionId": "read_order_history_page_v1",
             "requiredKeys": [
               "ok",
+              "evidenceStatus",
               "pageId",
               "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
               "itemCount",
-              "items",
+              "orders",
               "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
               "errors"
             ],
             "itemKeys": [
-              "name",
-              "price",
-              "url"
+              "orderNumber",
+              "purchaseDate",
+              "grandTotalText",
+              "status",
+              "detailUrl",
+              "evidenceStatus"
             ],
             "okWhen": [
               "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "itemCount equals orders.length",
+              "each order has identity, date, status and detail URL"
             ]
           }
         }
@@ -211,11 +322,86 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "order-lookup",
+          "intentPattern": "\\borders?\\b|purchase (?:history|date)|(?:first|last|recent) purchase|purchase.*\\bdate\\b|bought|shipping method|billing address|arrival|delivery|cancelled|pending|processing",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "order-lookup",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "read_order_history_page_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "order-lookup",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "reviews": {
@@ -237,6 +423,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -255,11 +445,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "reviews",
+          "intentPattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "reviews",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "reviews",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "account-forms": {
@@ -281,12 +545,38 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -299,11 +589,86 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "account-forms",
+          "intentPattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "account-forms",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "account-forms",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "category-navigation": {
@@ -337,6 +702,10 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
@@ -404,11 +773,140 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "category-navigation",
+          "intentPattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "category_page",
+          "identity": "task-category",
+          "desiredState": "category_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/clothing-shoes-jewelry/men/shoes.html",
+              "label": "clothing shoes jewelry > men > shoes",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/clothing-shoes-jewelry/women/clothing.html",
+              "label": "clothing shoes jewelry > women > clothing",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+              "label": "office products > office furniture lighting > cabinets racks shelves",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/clothing-shoes-jewelry/women/shoes.html",
+              "label": "clothing shoes jewelry > women > shoes",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/makeup/makeup-remover.html",
+              "label": "beauty personal care > makeup > makeup remover",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/oral-care/children-s-dental-care.html",
+              "label": "beauty personal care > oral care > children s dental care",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "read_current_list_page_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "category_page",
+            "identity": "task-category",
+            "desiredState": "category_open"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "catalog-aggregation": {
@@ -442,6 +940,10 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": 12,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
@@ -509,11 +1011,134 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "catalog-aggregation",
+          "intentPattern": "price range|full names|available models|products from",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "catalog-aggregation",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/beauty-personal-care/oral-care/teeth-whitening.html",
+              "label": "beauty personal care > oral care > teeth whitening",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/office-products/office-electronics/printers-accessories.html",
+              "label": "office products > office electronics > printers accessories",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/hair-care/styling-products.html",
+              "label": "beauty personal care > hair care > styling products",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/electronics/headphones.html",
+              "label": "electronics > headphones",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/oral-care/children-s-dental-care.html",
+              "label": "beauty personal care > oral care > children s dental care",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "read_current_list_page_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "catalog-aggregation",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "product-selection": {
@@ -547,6 +1172,10 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
@@ -614,11 +1243,122 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "product-selection",
+          "intentPattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "product",
+          "identity": "task-selected-product",
+          "desiredState": "product_detail_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/video-games/nintendo-switch.html",
+              "label": "video games > nintendo switch",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/clothing-shoes-jewelry/men/shoes.html",
+              "label": "clothing shoes jewelry > men > shoes",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/hair-care/styling-products.html",
+              "label": "beauty personal care > hair care > styling products",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "read_current_list_page_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "product",
+            "identity": "task-selected-product",
+            "desiredState": "product_detail_open"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "search-discovery": {
@@ -652,6 +1392,10 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
@@ -719,11 +1463,103 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "search-discovery",
+          "intentPattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "search-discovery",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "read_current_list_page_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "search-discovery",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "read-content": {
@@ -745,6 +1581,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -763,11 +1603,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "read-content",
+          "intentPattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "read-content",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "read-content",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "edit-submit": {
@@ -789,12 +1703,38 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -807,11 +1747,86 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "edit-submit",
+          "intentPattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "edit-submit",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "edit-submit",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "navigation": {
@@ -833,6 +1848,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -851,11 +1870,92 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "navigation",
+          "intentPattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "page",
+          "identity": "task-target-page",
+          "desiredState": "page_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/beauty-personal-care/hair-care/styling-products.html",
+              "label": "beauty personal care > hair care > styling products",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "page",
+            "identity": "task-target-page",
+            "desiredState": "page_open"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "other": {
@@ -877,6 +1977,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -895,12 +1999,87 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "other",
+          "intentPattern": ".*",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "other",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "other",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     }
-  }
+  },
+  "sequences": {}
 }

@@ -1,0 +1,16 @@
+{
+  "workflow": "other",
+  "routeHints": [],
+  "target": {
+    "entity": "other",
+    "identity": "task-target",
+    "desiredState": "task-success"
+  },
+  "allowedActions": [
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ]
+}

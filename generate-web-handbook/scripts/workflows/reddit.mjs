@@ -1,6 +1,6 @@
 // reddit workflow definitions
 // 目标站点：WebArena reddit（Postmill-based Reddit 克隆）
-// 任务语料：129 条，来自 WebArena test.raw.json reddit 站点任务
+// 任务语料：106 条，来自 webarena-verified reddit 站点任务
 
 export default [
   {
@@ -36,12 +36,43 @@ export default [
     title: "创建新论坛（Subreddit）",
     keywords: "create forum, new subreddit, sidebar, description",
     modelTerms: ["forum", "subreddit", "create"],
-    task: /create\s+(?:a\s+)?(?:new\s+)?forum\s+named|create\s+(?:a\s+)?(?:new\s+)?subreddit\s+named/i,
+    task: /create\s+(?:a\s+)?(?:new\s+)?forum\s+(?:named|with\s+name)|create\s+(?:a\s+)?(?:new\s+)?subreddit\s+(?:named|with\s+name)/i,
     evidence: /forum|subreddit|create|sidebar|description|论坛|创建/i,
     coverage: /forum|subreddit|create/i,
+    mutation: true,
+    expectedMutation: {
+      method: "POST",
+      endpointPattern: "/create_forum$",
+      semanticTarget: "forum",
+      direction: "create",
+      postState: "created_forum_visible",
+    },
+    formContracts: [
+      {
+        pageUrl: "http://localhost:9999/create_forum",
+        action: "http://localhost:9999/create_forum",
+        method: "post",
+        selector: "form[action='/create_forum']",
+        fields: [
+          { name: "forum[name]", type: "text", required: true },
+          { name: "forum[title]", type: "text", required: true },
+          { name: "forum[description]", type: "textarea", required: true },
+          { name: "forum[sidebar]", type: "textarea", required: true },
+        ],
+        submitButtons: [{ name: "Create", type: "submit" }],
+        requiredNetworkEvent: {
+          method: "POST",
+          urlPattern: "/create_forum$",
+          status: 302,
+        },
+        repeatability:
+          "无 reset 时必须使用任务外唯一名称做隔离试跑；正式评测任务先 GET /f/<name> 探测，已存在则标记状态污染，不把编辑页当作创建成功。",
+        postcondition: "GET /f/<forum_name> and read title, description, and sidebar text",
+      },
+    ],
     steps: [
-      "进入 reddit 首页，找到「Create a Forum」或「Create Community」入口。",
-      "填写论坛名称（name）和描述（description）。",
+      "进入 reddit 首页，点击「Create a Forum」或右上角用户菜单中的创建入口。",
+      "填写论坛名称（name/title）和描述（description）。",
       "按任务要求添加 sidebar 标签（tags/flairs）。",
       "提交创建，确认论坛主页已出现。",
     ],
@@ -61,9 +92,27 @@ export default [
     title: "在 Subreddit 中发布新帖",
     keywords: "post, create, submit, ask, share, discuss, notice, review, recommend",
     modelTerms: ["post", "submit", "subreddit"],
-    task: /\bpost\s+(?:a|my|in|to|about)\b|\bpost\s+(?:the\s+)?(?:question|review|notice|comment)\b|\bcreate\s+(?:a\s+)?(?:discussion\s+)?post\b|\bre-?post\b|\bask\s+for\s+(?:advice|(?:product\s+)?rec[oe]mmend)/i,
+    // post-create: 排除 upvote/downvote(vote)、forum-create、subscribe 的 intent
+    // "\bpost in\b" 需排除 "Upvote... post in"、"Subscribe... post in"
+    task: /^(?![\s\S]*\bcreate\s+(?:a\s+)?(?:new\s+)?forum\b)(?![\s\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\.space))[\s\S]*(?:\bpost\s+(?:a|my|about)\b|\bpost\s+(?:the\s+)?(?:question|review|notice|comment)\b|\bcreate\s+(?:a\s+)?(?:discussion\s+)?post\b|\bre-?post\b|\bask\s+for\s+(?:advice|(?:product\s+)?rec[oe]mmend)|\bpost\s+my\s+question\b)/i,
     evidence: /submit|post|thread|title|body|create|publish|发帖|发布|提交/i,
     coverage: /submit|post|thread|create|publish/i,
+    mutation: true,
+    expectedMutation: {
+      method: "POST",
+      endpointPattern: "/submit(?:/[^/]+)?$",
+      semanticTarget: "post",
+      direction: "create",
+      postState: "created_post_visible",
+    },
+    sequences: [
+      {
+        id: "post-create-then-reply",
+        title: "创建帖子并回复创建的帖子",
+        task: /\bpost\b[\s\S]*\b(?:then|and then)\b[\s\S]*\b(?:comment|reply)\b/i,
+        workflows: ["post-create", "post-reply"],
+      },
+    ],
     steps: [
       "识别任务要求的目标 subreddit（明确指定或需根据主题推断）。",
       "进入该 subreddit，点击「New Post」或「Create Post」。",
@@ -87,9 +136,17 @@ export default [
     title: "回复帖子或评论",
     keywords: "reply, comment, respond, answer",
     modelTerms: ["reply", "comment", "respond"],
-    task: /\breply\b.*\b(?:post|comment|thread)\b|\breply\s+to\b|\bcomment\b.*\b(?:post|thread)\b|\brespond\b|\banswer\b.*\b(?:post|thread)\b/i,
+    task: /^(?![\s\S]*\bthen\s+comment\b)[\s\S]*(?:\breply\b.*\b(?:post|comment|thread)\b|\breply\s+to\b|\bcomment\b.*\b(?:post|thread)\b|\brespond\b|\banswer\b.*\b(?:post|thread)\b)/i,
     evidence: /reply|comment|respond|answer|回复|评论/i,
     coverage: /reply|comment|respond/i,
+    mutation: true,
+    expectedMutation: {
+      method: "POST",
+      endpointPattern: "/f/[^/]+/[^/]+/-/comment$",
+      semanticTarget: "comment",
+      direction: "create",
+      postState: "reply_visible_under_target",
+    },
     steps: [
       "导航到任务指定的帖子或评论（通过给定 URL 或描述定位）。",
       "找到任务要求的目标评论（如「第一条回复」「manager 发的评论」等）。",
@@ -115,6 +172,14 @@ export default [
     task: /\bupvote\s+(?:the\s+)?(?:newest|latest|top|\d+\s+)?\w*\s*post\b|\bdownvote\b|\bthumb[s]?\s+(?:up|down)\b|\blike\s+all\b|\bdislike\s+all\b|\blike\s+(?:all\s+)?submissions?\b|\bdislike\s+(?:all\s+)?submissions?\b|\blike\s+(?:the\s+)?(?:newest|latest|top|all)\s+post\b|\bdislike\s+(?:the\s+)?(?:newest|latest|top|all)\s+post\b/i,
     evidence: /vote|upvote|downvote|like|dislike|thumbs|投票|点赞|踩/i,
     coverage: /vote|like|dislike|thumbs/i,
+    mutation: true,
+    expectedMutation: {
+      method: "POST",
+      endpointPattern: "/(?:sv|f/[^/]+/[^/]+/-/(?:upvote|downvote))",
+      semanticTarget: "vote",
+      direction: "task_vote_direction",
+      postState: "vote_control_active",
+    },
     steps: [
       "导航到任务指定的 subreddit 或用户页面。",
       "找到目标帖子（通过排序「New」「Top」「Hot」定位）。",
@@ -141,6 +206,34 @@ export default [
     task: /\b(?:change|update|set|edit)\s+my\s+(?:reddit\s+)?bio\b|\bedit\s+my\s+post\b|\bedit\s+my\s+(?:post\s+)?on\b/i,
     evidence: /bio|profile|account|settings|edit|self|个人资料|简介|编辑/i,
     coverage: /bio|profile|settings|edit/i,
+    mutation: true,
+    expectedMutation: {
+      method: "POST",
+      endpointPattern: "/user/[^/]+/edit_biography$",
+      semanticTarget: "user_biography",
+      direction: "update",
+      postState: "biography_equals_task_value",
+    },
+    formContracts: [
+      {
+        pageUrl: "http://localhost:9999/user/MarvelsGrantMan136/edit_biography",
+        action: "http://localhost:9999/user/MarvelsGrantMan136/edit_biography",
+        method: "post",
+        selector: "form[action$='/edit_biography']",
+        fields: [
+          { name: "user_biography[biography]", type: "textarea", required: true },
+        ],
+        submitButtons: [{ name: "Save", type: "submit" }],
+        requiredNetworkEvent: {
+          method: "POST",
+          urlPattern: "/user/MarvelsGrantMan136/edit_biography$",
+          status: 302,
+        },
+        repeatability:
+          "无 reset 时使用带 run id 的临时 bio 做隔离验证；正式任务写入前先读取当前 bio，写后 GET 用户页确认目标文本。",
+        postcondition: "GET user profile or edit page and verify biography text exactly",
+      },
+    ],
     steps: [
       "进入账户设置（Settings / Preferences / Edit Profile）。",
       "找到 Bio / About 字段，清除旧内容后填入任务要求的文字。",
@@ -163,11 +256,49 @@ export default [
     task: /\bsubscribe\b|\bfollow\s+(?:a\s+)?(?:forum|subreddit|thread|post)\b/i,
     evidence: /subscribe|follow|join|订阅|关注/i,
     coverage: /subscribe|follow/i,
+    mutation: true,
+    target: {
+      entity: "forum_or_post_subscription",
+      identity: { forum: "task_forum", post: "task_post_if_specified" },
+      desiredState: { subscribed: true },
+    },
+    expectedMutation: {
+      method: "POST",
+      endpointPattern: "/f/[^/]+/subscribe\\.json$",
+      semanticTarget: "subscription",
+      direction: "subscribe",
+      responseContent: { subscribed: true },
+      postState: "subscribed_true",
+    },
+    observation: {
+      currentState: {
+        source: "browser.subscription_control",
+        values: ["subscribed", "unsubscribed"],
+      },
+    },
+    formContracts: [
+      {
+        pageUrl: "http://localhost:9999/f/<forum>/<post>",
+        action: "http://localhost:9999/f/<forum>/subscribe.json",
+        method: "post",
+        selector: "form[action$='/subscribe.json'], button:has-text('Subscribe')",
+        fields: [],
+        submitButtons: [{ name: "Subscribe", type: "submit" }],
+        requiredNetworkEvent: {
+          method: "POST",
+          urlPattern: "/f/[^/]+/subscribe\\.json$",
+          responseContent: { subscribed: true },
+        },
+        repeatability:
+          "无 reset 时按任务族单独统计；先 GET 目标 forum/post 读取当前订阅状态，若已订阅则记录 pre-existing，不把该题混入可重复准确率。",
+        postcondition: "write POST, then GET target forum/post and verify subscribed state",
+      },
+    ],
     steps: [
-      "进入任务指定的 subreddit，找到 trending / hot 帖子。",
-      "打开帖子详情页。",
-      "点击 Subscribe（订阅帖子通知）按钮。",
-      "确认订阅状态变更（按钮文字变为 Subscribed 或 Unsubscribe）。",
+      "进入任务指定的 subreddit 页面（直接导航到 /f/subreddit-name）。",
+      "点击侧边栏中的「Subscribe」按钮订阅该论坛；或进入帖子详情页订阅帖子通知。",
+      "如果任务要求「从最热帖子页面订阅」，先找到 Hot 排序的第一个帖子，进入详情，再从帖子页或侧边栏订阅。",
+      "确认订阅状态变更（按钮文字变为 Subscribed 或显示已订阅）。",
     ],
     success: ["目标帖子或论坛的订阅状态已激活。"],
     checks: [

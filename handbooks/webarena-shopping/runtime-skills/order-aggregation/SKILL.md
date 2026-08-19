@@ -5,10 +5,10 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 
 # 运行规则
 
-- 保持一个短台账：目标、固定约束、已验证记录、未访问页。不要在执行中改变口径。
-- 每次分页只允许一次批量读取；记录页面身份，禁止重复访问同一页。
-- 达到成功判据后立即结束。任务协议要求 NOT_FOUND 时使用 `retrieved_data: null`，不要用空数组。
-- 不得把中断、缺少证据或空结果包装成 SUCCESS；不得回答或索取下一题。
+- 只执行当前路由；保持目标、硬约束和已验证证据台账，不改变任务口径。
+- 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
+- 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
+- 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
 
 # 订单筛选、金额聚合与退款
 
@@ -29,105 +29,28 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - `accepted_records`：满足时间与状态条件的订单台账
 - `next_href`：唯一待访问的下一页；无下一页时为 `null`
 
-## 硬执行契约
-
-- `read_current_list_page_v1` 是当前商品列表页唯一允许的列表读取动作。
-- 对每个页面身份只调用一次 evaluate，并完整执行下方模板；不得先用 snapshot/find 逐卡观察，也不得把模板拆成多个 evaluate。
-- 只有返回 `ok: true` 才能更新台账并沿 `nextHref` 前进；返回 `ok: false` 时记录 `errors`，重新定位页面结构，不得猜测字段或重复读取同一页面身份。
-- `complete: true` 只证明当前页面没有可用 Next；集合完成还必须满足工作流的总数与去重台账条件。
-
 ## 循环动作
 
-1. 先把日期上下界、订单状态、商品条件和运费口径写成固定筛选条件。
-2. 在订单历史中一次读取每页的订单号、日期、状态、总额和详情链接；记录页面身份、行数与 Next。
-3. 只为筛选后的订单打开详情；按任务口径读取商品小计、数量、运费和总额。
-4. 只有已访问行数覆盖页面报告的总记录数，或在完整当前页确认 Next 不存在后，才用去重台账计数或求和。
+1. 先做时间表达式预检：若任务只写 `past months` 但没有数量或上下界，停止执行浏览流程，按任务 schema 直接返回零值对象，不要打开订单历史。
+2. 先把日期上下界、订单状态、商品条件和运费口径写成固定筛选条件。
+3. 在订单历史中一次读取每页的订单号、日期、状态、总额和详情链接；记录页面身份、行数与 Next。
+4. 只为筛选后的订单打开详情；按任务口径读取商品小计、数量、运费和总额。
+5. 只有已访问行数覆盖页面报告的总记录数，或在完整当前页确认 Next 不存在后，才用去重台账计数或求和。
 
 ## 停止条件与必检项
 
 - “spent”默认排除 Canceled；退款任务只处理 Canceled，除非任务明确另有状态口径。
 - 包含运费时使用 Grand Total；排除运费或按商品类别统计时使用商品小计，不要用 Grand Total。
+- 包含 shipping/handling 时，逐订单同时记录商品小计、shipping、handling、Grand Total 和状态；Grand Total 缺失或未核对时不得用小计代替总额。
+- 金额聚合前逐行复核时间窗口、complete 状态和金额字段；订单数量正确但金额字段缺失仍视为未完成。
 - 退款先建立逐订单账本，再按 `可退商品小计 - 明确保留商品行金额 + 可退运费` 计算；每个保留项和运费口径都必须有行级证据。
-- “过去 N 个月”按包含当前月的 N 个日历月解释；只有任务明确给出天数或滚动日期时才使用滚动窗口。
+- WebArena 日期口径：若任务写 “past N months/过去 N 个月”，按任务日期向前回推 N*30 天，且订单日期必须严格晚于下界；“过去 N 天”同样严格晚于下界。只有任务明确写 calendar month/month-to-date 时才使用日历月口径。
+- 若任务只写 `past months` 但没有数量或上下界，不得扩成全部历史；把时间范围标记为不完整，返回零值对象或阻塞证据，不能猜测 SUCCESS。
 - 进入详情后核对页面订单号；商品类别优先以站点分类和商品用途判断：主用途属于目标类别才计入，名称近似但用途不同的配件不计入。
 - 食品相关可包含烘焙装饰等直接用于食品的商品；hair care/style 只包含护理或造型产品，不包含纯装饰配件。
 - 不能因当前页没有分页控件就断言只有一页；同时核对总记录文本、已访问行数和页面身份。
-- 无匹配记录时返回任务协议要求的空值；不要用空数组代替 null。
+- 无匹配记录时严格遵守任务要求的返回类型：对象任务返回对象的零值字段，列表任务才返回空列表，明确 null 协议才返回 null。
 - 成功判据未被页面证据证明时继续；`next_action` 为空或动作开始重复时停止并进入失败恢复。
-
-## 已观察到的分类路径
-
-这些路径来自站点链接和任务词匹配，只用于缩小导航范围；到达后仍要核对页面。
-
-- electronics > headphones > over ear headphones：`/electronics/headphones/over-ear-headphones.html`
-- grocery gourmet food > snacks sweets > snack foods：`/grocery-gourmet-food/snacks-sweets/snack-foods.html`
-- beauty personal care > hair care：`/beauty-personal-care/hair-care.html`
-- electronics > power accessories > ac adapters：`/electronics/power-accessories/ac-adapters.html`
-
-## 已验证批量读取结构
-
-这些 selector 来自已抓取页面；先在实时页面确认存在，再在一次 evaluate 中按卡片作用域提取字段。
-
-- 商品卡片：`li.product-item`；名称 `a.product-item-link`；价格 `.price-box .price`；链接 `a.product-item-link`
-- 分页：每页数量 `select[data-role='limiter']`；总数 `.toolbar-amount`；Next `.pages .pages-item-next > a.action.next`
-
-## 单次读取模板
-
-在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。
-
-```js
-() => {
-  const errors = [];
-  const rawCards = [...document.querySelectorAll("li.product-item")];
-  const cards = rawCards.filter(card =>
-    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)
-  );
-  const items = cards.map(card => {
-    const nameNode = card.querySelector("a.product-item-link");
-    const link = card.querySelector("a.product-item-link");
-    const priceText = card.querySelector(".price-box .price")?.textContent || "";
-    const priceMatch = priceText.replace(/,/g, "").match(/\d+(?:\.\d{1,2})?/);
-    return {
-      name: nameNode?.textContent.trim() || "",
-      price: priceMatch ? Number(priceMatch[0]) : null,
-      url: link?.href || ""
-    };
-  });
-  if (items.length === 0) errors.push("product-list-empty-or-selector-mismatch");
-  if (items.some(item => !item.name || !item.url || item.price === null)) {
-    errors.push("required-product-field-missing");
-  }
-  const next = document.querySelector(".pages .pages-item-next > a.action.next");
-  const nextDisabled = !next ||
-    next.matches("[disabled], .disabled, [aria-disabled=\"true\"]") ||
-    Boolean(next.closest(".disabled, [aria-disabled=\"true\"]"));
-  const nextHref = nextDisabled ? null : next.href || null;
-  const limiter = document.querySelector("select[data-role='limiter']");
-  const limiterOptions = limiter
-    ? [...limiter.options].map(option => option.value).filter(Boolean)
-    : [];
-  return {
-    actionId: "read_current_list_page_v1",
-    ok: errors.length === 0,
-    pageId: JSON.stringify({
-      url: location.href,
-      itemCount: items.length,
-      firstUrl: items[0]?.url || "",
-      lastUrl: items.at(-1)?.url || ""
-    }),
-    totalText: document.querySelector(".toolbar-amount")?.textContent.trim() || "",
-    rawCardCount: rawCards.length,
-    ignoredCardCount: rawCards.length - cards.length,
-    itemCount: items.length,
-    items,
-    nextHref,
-    complete: nextHref === null,
-    currentLimiterValue: limiter?.value || null,
-    limiterOptions,
-    errors
-  };
-}
-```
 
 ## 已验证结构
 
@@ -135,20 +58,16 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - `history-purchase-date`：`:scope > td[data-th="Date"]`（history-row）
 - `history-grand-total`：`:scope > td[data-th="Order Total"] .price`（history-row）
 - `history-status`：`:scope > td[data-th="Status"]`（history-row）
-- `history-detail-link`：`:scope > td[data-th="Actions"] > a.action.view`（history-row）
-- `pagination-next`：`.pages .pages-item-next > a.action.next`（document）
-- `detail-grand-total`：`tr.grand_total > td.amount[data-th="Grand Total"] .price`（detail-totals）
 
 ## 最终状态闸门
 
-- 成功前的最后一次浏览器调用必须读取实时 `location.href + document.title`；最终答案只能描述这次读取到的状态。
-- NAVIGATE：将 location.href 与台账中记录的目标 URL 做字符串比较（含路径、query 参数和小数边界）；不一致时直接导航到台账 URL，再重新读取，不得以视觉近似替代字符串比较。
-- RETRIEVE：校验返回值的类型、字段集合和空值协议（NOT_FOUND → null，不是空数组）；证据不足时不得返回 SUCCESS。
+- 报告 SUCCESS 前，最后一次浏览器工具调用必须是 `localweb_browser_snapshot` 或 `localweb_browser_evaluate`；navigate/click 后必须再读取当前状态。
+- 按前置 Workflow IR 的 `postStateGate` 完成 URL、标题/目标对象和结果证据校验；闸门通过前不得报告 SUCCESS。
 
 ## 完成证明
 
 - 非空结果：accepted_records 非空，且每条记录都有日期、状态和商品条件的行级证据。——空结果：accepted_records 为空，且已记录终页证据（最后一页 URL、已访问行数、页面报告总数三者吻合）。两种情况必须满足其中之一，不得仅凭台账为空就声明 SUCCESS。
-- 计数、金额和分组能回溯到同一份去重台账；无匹配时返回任务协议要求的 null 并附终页证据。
+- 计数、金额和分组能回溯到同一份去重台账；无匹配时先读取任务要求的输出 schema：若任务要求对象字段，返回零值对象；只有任务协议明确使用 null 时才返回 null。
 
 ## 失败恢复
 

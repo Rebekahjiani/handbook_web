@@ -6,17 +6,17 @@
   "cdp": "http://127.0.0.1:9222",
   "maxPages": 20,
   "maxDepth": 2,
-  "coverageCorpusFile": null,
+  "coverageCorpusFile": "/Users/rebekah/handbook_web/generate-web-handbook/scripts/corpus/webarena-reddit.json",
   "focusTasksFile": null,
   "contextModelPath": null,
-  "siteKey": null,
+  "siteKey": "reddit",
   "coverageTaskCount": 0,
   "focusTaskCount": 0,
   "taskSeedsAvailable": 0,
   "taskSeedsQueued": 0,
-  "status": "completed",
+  "status": "rebuilt_from_snapshots",
   "startedAt": "2026-08-07T01:46:14.712Z",
-  "updatedAt": "2026-08-07T01:48:11.665Z",
+  "updatedAt": "2026-08-12T02:06:46.218Z",
   "pages": [
     {
       "url": "http://localhost:9999/",
@@ -4237,10 +4237,12 @@
     "routerUnmatched": 0,
     "routerConflicts": 0,
     "contextModelLoaded": false,
-    "workflowsGenerated": 7,
+    "workflowsGenerated": 9,
     "coveredWorkflows": 6,
     "workflowGaps": 0,
     "redirectsSkipped": 0,
-    "errors": 0
-  }
+    "errors": 0,
+    "executionContractActions": 0
+  },
+  "workflowConfig": "/Users/rebekah/handbook_web/generate-web-handbook/scripts/workflows/reddit.mjs"
 }

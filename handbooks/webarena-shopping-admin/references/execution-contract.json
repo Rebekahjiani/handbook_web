@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-07T01:56:36.292Z",
+  "generatedAt": "2026-08-12T02:04:07.902Z",
   "site": {
     "key": "shopping_admin",
     "name": "webarena-shopping-admin",
@@ -27,6 +27,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -45,11 +49,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "admin-report",
+          "intentPattern": "best.?selling|top.?\\d|revenue|total.*sold|items? sold|sales.*report|best.*brand|best.*product type",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "admin-report",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "admin-report",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "admin-product-edit": {
@@ -71,6 +149,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -89,11 +171,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "admin-product-edit",
+          "intentPattern": "(?:reduce|increase)\\s+(?:the\\s+)?price|(?:disable|enable)\\s+\\w|mark\\s+all\\s+\\w|(?:update|change|set)\\s+(?:the\\s+|all\\s+)?(?:\\w+\\s+)*(?:price|description|stock|out.?of.?stock|status|on.?sale|attribute|SKU)|set.*on.?sale",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "admin-product-edit",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "admin-product-edit",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "admin-customer": {
@@ -115,6 +271,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -133,11 +293,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "admin-customer",
+          "intentPattern": "customer(?:\\s+\\w+){0,3}\\s+(?:email|name|group|address|account)|(?:list|view|return|get)\\s+(?:all\\s+)?customers?(?:\\s|$)|view.*details.*(?:all\\s+)?customers?",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "admin-customer",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "admin-customer",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "read-content": {
@@ -159,6 +393,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -177,11 +415,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "read-content",
+          "intentPattern": "\\b(?:get|return|list|show|summarize|what(?:'s| is)|how many|find out|read|retrieve|give me)\\b",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "read-content",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "read-content",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "edit-submit": {
@@ -203,12 +515,38 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": true,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "missing_expected_mutation",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -221,11 +559,86 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "edit-submit",
+          "intentPattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "edit-submit",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "edit-submit",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "navigation": {
@@ -247,6 +660,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -265,11 +682,85 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "navigation",
+          "intentPattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "page",
+          "identity": "task-target-page",
+          "desiredState": "page_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "page",
+            "identity": "task-target-page",
+            "desiredState": "page_open"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     },
     "other": {
@@ -291,6 +782,10 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
@@ -309,12 +804,87 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "other",
+          "intentPattern": ".*",
+          "siteKeys": [
+            "shopping_admin"
+          ],
+          "origin": "http://localhost:7780"
+        },
+        "target": {
+          "entity": "other",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "other",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified"
+        }
       }
     }
-  }
+  },
+  "sequences": {}
 }

@@ -8,6 +8,7 @@ import {
 } from "./task-workflows.mjs";
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
+import { provenanceForContextRoot } from "./context-model-provenance.mjs";
 
 async function loadWorkflowDefs(configPath) {
   if (!configPath) return null;
@@ -57,6 +58,7 @@ function slug(value, fallback = "site") {
 
 async function writeAggregateRouter(outputRoot) {
   const routes = [];
+  const sequences = [];
   for (const entry of await fs.readdir(outputRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.includes(".previous-")) continue;
     const routerFile = path.join(outputRoot, entry.name, "router.json");
@@ -71,11 +73,23 @@ async function writeAggregateRouter(outputRoot) {
           : {}),
       });
     }
+    for (const sequence of router.sequences || []) {
+      sequences.push({
+        ...sequence,
+        skill_files: (sequence.skill_files || []).map((file) =>
+          path.posix.join(entry.name, file),
+        ),
+        ...(sequence.contract_file
+          ? { contract_file: path.posix.join(entry.name, sequence.contract_file) }
+          : {}),
+      });
+    }
   }
   await writeJsonAtomic(path.join(outputRoot, "webarena-router.json"), {
     schema_version: 1,
     router: "webarena-handbook-router",
     routes,
+    sequences,
   });
 }
 
@@ -115,6 +129,7 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    evidenceOnly: manifest.exploration?.mode === "independent",
     ...(workflowDefs ? { workflowDefs } : {}),
   });
   const previousRouterFile = path.join(siteDir, "router.json");
@@ -127,6 +142,10 @@ async function main() {
     siteKey: siteKey || generated.router.site.key,
     origin,
     previousRouter,
+    allowedRouteRemovals:
+      manifest.exploration?.mode === "independent"
+        ? (previousRouter?.routes || []).map((route) => route.route).filter(Boolean)
+        : [],
     allowFallbackAssignments: args["allow-fallback-assignments"] === "true",
   });
   if (!routerAudit.passed) {
@@ -148,6 +167,20 @@ async function main() {
       0,
     ),
   };
+  if (contextModelPath) {
+    generated.coverage.contextModelProvenance = provenanceForContextRoot(
+      path.resolve(contextModelPath),
+      {
+        rawEvidencePath: manifest.exploration?.rawEvidencePath,
+        reviewedEvidencePath: manifest.exploration?.reviewedEvidencePath,
+        convergence: manifest.exploration?.convergence || null,
+        humanJudgments: manifest.exploration?.humanJudgments || [],
+        commands: manifest.exploration?.commands || {},
+        codeHashes: manifest.exploration?.codeHashes || {},
+        exitCodes: manifest.exploration?.exitCodes || {},
+      },
+    );
+  }
 
   const workflowDir = path.join(siteDir, "references", "workflows");
   await fs.mkdir(workflowDir, { recursive: true });
@@ -160,6 +193,11 @@ async function main() {
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, content);
   }
+  const runtimeContractDir = path.join(siteDir, "runtime-contracts");
+  await fs.mkdir(runtimeContractDir, { recursive: true });
+  for (const [filename, content] of Object.entries(generated.runtimeContracts || {})) {
+    await writeJsonAtomic(path.join(runtimeContractDir, filename), content);
+  }
   await fs.writeFile(path.join(siteDir, "SKILL.md"), generated.skill);
   await fs.writeFile(path.join(siteDir, "references", "handbook.md"), generated.handbook);
   await writeJsonAtomic(path.join(siteDir, "references", "execution-contract.json"), generated.executionContract);
@@ -170,10 +208,14 @@ async function main() {
 
   manifest.status = "rebuilt_from_snapshots";
   manifest.updatedAt = new Date().toISOString();
+  if (args["workflow-config"] && !manifest.workflowConfig) {
+    manifest.workflowConfig = path.resolve(args["workflow-config"]);
+  }
   manifest.summary = {
     ...(manifest.summary || {}),
     workflowsGenerated: generated.coverage.workflows.length,
     executionContractActions: generated.coverage.executionContract.actionCount,
+    contextModelLoaded: Boolean(contextModel),
   };
   await writeJsonAtomic(manifestFile, manifest);
   process.stdout.write(`${siteDir}\n`);

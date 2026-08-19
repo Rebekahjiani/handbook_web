@@ -86,7 +86,7 @@ node generate-web-handbook/scripts/verify-handbook.mjs \
   --cdp http://127.0.0.1:9222
 ```
 
-9. 使用 `quick_validate.py` 校验生成的站点 skill。
+9. 若外部工具链提供 `quick_validate.py`，使用它校验生成的站点 skill；本仓库不包含该文件，仓库内可执行验证使用 `verify-handbook.mjs` 与 `npm --prefix generate-web-handbook test`。
 10. 检查各 Markdown 文件体量，确保路由手册和单个运行时 skill 都保持小型；不要
    为减少路由数量把订单聚合、订单查找、分类导航和商品聚合重新合并。
 

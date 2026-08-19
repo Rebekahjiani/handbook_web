@@ -1,0 +1,25 @@
+{
+  "workflow": "order-aggregation",
+  "routeHints": [],
+  "target": {
+    "entity": "order_set",
+    "identity": "task-order-filter",
+    "desiredState": "evidence_complete"
+  },
+  "allowedActions": [
+    "read_order_history_page_v1",
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ],
+  "contractAction": {
+    "tool": "localweb_contract_action",
+    "actionId": "read_order_history_page_v1",
+    "route": "shopping",
+    "contractPath": "webarena-shopping/references/execution-contract.json",
+    "requiredFirstStep": true,
+    "call": "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。"
+  }
+}

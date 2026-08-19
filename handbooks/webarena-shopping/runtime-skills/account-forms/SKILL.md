@@ -5,10 +5,10 @@ description: webarena-shopping 的账户、地址与表单工作流。
 
 # 运行规则
 
-- 保持一个短台账：目标、固定约束、已验证记录、未访问页。不要在执行中改变口径。
-- 每次分页只允许一次批量读取；记录页面身份，禁止重复访问同一页。
-- 达到成功判据后立即结束。任务协议要求 NOT_FOUND 时使用 `retrieved_data: null`，不要用空数组。
-- 不得把中断、缺少证据或空结果包装成 SUCCESS；不得回答或索取下一题。
+- 只执行当前路由；保持目标、硬约束和已验证证据台账，不改变任务口径。
+- 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
+- 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
+- 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
 
 # 账户、地址与表单
 
@@ -28,6 +28,14 @@ description: webarena-shopping 的账户、地址与表单工作流。
 - `accepted_evidence`：支持完成结论的页面证据
 - `next_action`：当前唯一动作；完成或无法安全推进时为 `null`
 
+## 写操作执行契约
+
+- 按机器契约中的 phases 顺序执行；任何阶段失败都只能重新读取当前状态后恢复，不能跳阶段或改写任务值。
+- 从当前 DOM 读取 form action、目标对象身份和字段；每个字段与任务原文完全一致后才允许提交，提交/投票/订阅动作最多一次。
+- 若机器契约声明 requiredNetworkEvents，写操作完成必须有匹配的非登录 POST 事件；仅靠页面看起来正确不能声明 SUCCESS。
+- 提交后立即读取当前页面或目标对象，核对 URL、标题/文本、状态标记或响应确认；缺少该证据时保持未完成。
+- 复合任务必须逐阶段验证；创建后再评论/回复时，先确认新对象身份，再定位该对象的评论表单。
+
 ## 循环动作
 
 1. 确认当前登录状态和目标表单。
@@ -37,15 +45,14 @@ description: webarena-shopping 的账户、地址与表单工作流。
 
 ## 操作锚点
 
-- My Account：`getByRole("link", { name: "My Account", exact: true })`
-- Sign Out：`getByRole("link", { name: "Sign Out", exact: true })`
-- Contact Us：`locator("a[href=\"${SITE_ORIGIN}/contact/\"]")`
+- My Account：`getByRole("link", { name: "My Account", exact: true })`（confidence=0.85，evidence=unique,scoped）
+- Sign Out：`getByRole("link", { name: "Sign Out", exact: true })`（confidence=0.75，evidence=unique,scoped）
+- Contact Us：`locator("a[href=\"${SITE_ORIGIN}/contact/\"]")`（confidence=0.65，evidence=unique,scoped）
 
 ## 最终状态闸门
 
-- 成功前的最后一次浏览器调用必须读取实时 `location.href + document.title`；最终答案只能描述这次读取到的状态。
-- NAVIGATE：将 location.href 与台账中记录的目标 URL 做字符串比较（含路径、query 参数和小数边界）；不一致时直接导航到台账 URL，再重新读取，不得以视觉近似替代字符串比较。
-- RETRIEVE：校验返回值的类型、字段集合和空值协议（NOT_FOUND → null，不是空数组）；证据不足时不得返回 SUCCESS。
+- 报告 SUCCESS 前，最后一次浏览器工具调用必须是 `localweb_browser_snapshot` 或 `localweb_browser_evaluate`；navigate/click 后必须再读取当前状态。
+- 按前置 Workflow IR 的 `postStateGate` 完成 URL、标题/目标对象和结果证据校验；闸门通过前不得报告 SUCCESS。
 
 ## 完成证明
 

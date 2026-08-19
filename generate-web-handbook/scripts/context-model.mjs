@@ -23,6 +23,7 @@ function emptyModel(source) {
     surfaces: [],
     actions: [],
     locators: [],
+    bindings: [],
   };
 }
 
@@ -36,6 +37,9 @@ function mergeDocument(model, document) {
     "locators",
   ]) {
     if (Array.isArray(document[key])) model[key].push(...document[key]);
+  }
+  if (document.binding_set_id && Array.isArray(document.surfaces)) {
+    model.bindings.push(document);
   }
   if (document.id && Array.isArray(document.business_conditions)) {
     model.capabilities.push(document);
@@ -64,13 +68,39 @@ async function loadDirectory(directory) {
       mergeDocument(model, await readJson(path.join(folder, name)));
     }
   }
+
+  const surfacesFile = path.join(directory, "platform-core", "surfaces.json");
+  if (await exists(surfacesFile)) {
+    const registry = await readJson(surfacesFile);
+    if (Array.isArray(registry.surfaces)) model.surfaces.push(...registry.surfaces);
+    for (const surface of registry.surfaces || []) {
+      if (!surface?.id) continue;
+      const surfaceDir = path.join(directory, "platform-core", "surfaces", surface.id);
+      const actionsFile = path.join(surfaceDir, "actions.json");
+      if (!(await exists(actionsFile))) continue;
+      const document = await readJson(actionsFile);
+      for (const action of document.actions || []) {
+        model.actions.push({ ...action, surface_id: surface.id });
+      }
+    }
+  }
+
+  const formalBindingsFile = path.join(
+    directory,
+    "context-model",
+    "capability-bindings.json",
+  );
+  if (await exists(formalBindingsFile)) {
+    const document = await readJson(formalBindingsFile);
+    if (Array.isArray(document.bindings)) model.bindings.push(...document.bindings);
+  }
   return model;
 }
 
 function deduplicate(items, key) {
   const unique = new Map();
   for (const item of items) {
-    const identity = item?.[key];
+    const identity = item?.[key] || (key === "id" ? item?.binding_set_id : null);
     if (identity && !unique.has(identity)) unique.set(identity, item);
   }
   return [...unique.values()];
@@ -99,6 +129,7 @@ export async function loadContextModel(source) {
     "surfaces",
     "actions",
     "locators",
+    "bindings",
   ]) {
     model[key] = deduplicate(model[key], "id");
   }
@@ -129,6 +160,7 @@ export function contextForWorkflow(model, terms = []) {
       surfaces: [],
       actions: [],
       locators: [],
+      bindings: [],
     };
   }
   const objectIds = new Set(
@@ -231,6 +263,14 @@ export function contextForWorkflow(model, terms = []) {
       scope: item.scope,
       status: item.verification_status,
     }));
+  const bindings = (model.bindings || []).filter((binding) =>
+    (binding.surfaces || []).some((surface) =>
+      includesTerm(semanticText(surface, ["id", "url_pattern", "required_field_ids"]), terms),
+    ) || includesTerm(
+      semanticText(binding, ["id", "capability_id", "surface_id"]),
+      terms,
+    ),
+  );
   return {
     objects: model.objects
       .filter((item) => objectIds.has(item.id))
@@ -252,6 +292,7 @@ export function contextForWorkflow(model, terms = []) {
     surfaces: surfaces.slice(0, 2),
     actions: actions.slice(0, 3),
     locators: locators.slice(0, 7),
+    bindings,
   };
 }
 

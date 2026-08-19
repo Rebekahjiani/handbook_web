@@ -1,0 +1,23 @@
+{
+  "workflow": "navigation",
+  "routeHints": [
+    {
+      "path": "/beauty-personal-care/hair-care/styling-products.html",
+      "label": "beauty personal care > hair care > styling products",
+      "terms": {},
+      "leafTerms": {}
+    }
+  ],
+  "target": {
+    "entity": "page",
+    "identity": "task-target-page",
+    "desiredState": "page_open"
+  },
+  "allowedActions": [
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ]
+}
