@@ -37,7 +37,7 @@ export const WORKFLOWS = [
     keywords: "订单数量、消费金额、时间范围、商品类别、退款",
     modelTerms: ["order", "history"],
     task:
-      /how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping/i,
+      /how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping/i,
     preflightGuards: [
       {
         id: "missing-past-months-window",
@@ -107,7 +107,7 @@ export const WORKFLOWS = [
         { field: "purchase_date", operator: "range" },
         { field: "product_category", operator: "eq" },
       ],
-      outputs: ["order_number", "purchase_date", "status"].map((field) => ({ field, type: "string" })),
+      outputs: ["order_number", "purchase_date", "status", "arrival_date"].map((field) => ({ field, type: "string" })),
       executionDependencies: ["detail_url"],
       requiresDetail: true,
     },
