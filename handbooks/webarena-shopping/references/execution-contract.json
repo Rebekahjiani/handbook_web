@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-19T08:37:54.495Z",
+  "generatedAt": "2026-08-19T09:02:59.709Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -16,7 +16,7 @@
       ],
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/order-aggregation/SKILL.md",
-      "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
+      "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
@@ -208,7 +208,7 @@
         "schemaVersion": 2,
         "route": {
           "workflow": "order-aggregation",
-          "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
+          "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
           "siteKeys": [
             "shopping"
           ],

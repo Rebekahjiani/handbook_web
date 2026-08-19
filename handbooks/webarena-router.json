@@ -146,7 +146,7 @@
       "priority": 0,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
+      "intent_pattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
       "skill_file": "webarena-shopping/runtime-skills/order-aggregation/SKILL.md",
       "runtime_contract_file": "runtime-contracts/order-aggregation.json",
       "runtime_mode": "workflow_skill",
@@ -352,6 +352,10 @@
           },
           {
             "field": "status",
+            "type": "string"
+          },
+          {
+            "field": "arrival_date",
             "type": "string"
           }
         ],
