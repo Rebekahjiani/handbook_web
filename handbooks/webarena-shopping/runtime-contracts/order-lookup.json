@@ -6,14 +6,43 @@
     "identity": "task-target",
     "desiredState": "task-success"
   },
+  "selectionContract": {
+    "entity": "order_set",
+    "preserveTaskConstraints": [
+      "exact_date",
+      "product_category",
+      "status"
+    ],
+    "detailEvidenceRequired": true,
+    "categoryMatch": "match the ordered item's primary category/use; do not include unrelated items from the same order",
+    "amountFieldByConstraint": {
+      "excludeShippingAndHandling": "item_subtotal",
+      "includeShippingAndHandling": "grand_total"
+    },
+    "aggregation": "sum only accepted item lines after exact date/category/status checks"
+  },
   "allowedActions": [
     "read_order_history_page_v1",
+    "read_order_detail_items_v1",
     "verify_final_state_v1"
   ],
   "stopConditions": [
     "target identity and desired state verified",
     "required evidence unavailable: stop without SUCCESS"
   ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "verifyAnswerEvidence",
+    "enforcement": "observe",
+    "requiredFields": [
+      "answer",
+      "evidenceRecordIds",
+      "filters",
+      "amountField",
+      "ledger"
+    ],
+    "failureAction": "reject_success_or_fallback"
+  },
   "contractAction": {
     "tool": "localweb_contract_action",
     "actionId": "read_order_history_page_v1",

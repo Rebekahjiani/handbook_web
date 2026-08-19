@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-13T06:12:27.365Z",
+  "generatedAt": "2026-08-19T08:37:54.495Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -23,6 +23,7 @@
       },
       "allowedActions": [
         "read_order_history_page_v1",
+        "read_order_detail_items_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
@@ -97,7 +98,7 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    recordId: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
           "requiredOutput": {
             "actionId": "read_order_history_page_v1",
             "requiredKeys": [
@@ -125,6 +126,51 @@
               "each order has identity, date, status and detail URL"
             ]
           }
+        },
+        {
+          "actionId": "read_order_detail_items_v1",
+          "kind": "browser.evaluate",
+          "deterministic": true,
+          "scope": "current-order-detail-page",
+          "maxCallsPerPageId": 2,
+          "selectors": {
+            "row": "table#my-orders-table tbody tr",
+            "fields": {
+              "name": "td.col.name",
+              "sku": "td.col.sku",
+              "price": "td.col.price .price, td.col.price",
+              "qty": "td.col.qty",
+              "subtotal": "td.col.subtotal .price, td.col.subtotal"
+            },
+            "totalsLabel": ".block-order-details-view, .order-info"
+          },
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table tbody tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim().replace(/\\s+/g, \" \") || \"\";\n  const items = rows.map(row => ({\n    name: read(row, \"td.col.name\"),\n    sku: read(row, \"td.col.sku\"),\n    price: read(row, \"td.col.price .price, td.col.price\"),\n    qty: read(row, \"td.col.qty\"),\n    subtotal: read(row, \"td.col.subtotal .price, td.col.subtotal\")\n  }));\n  const totals = {};\n  for (const tr of document.querySelectorAll(\"table#my-orders-table tfoot tr\")) {\n    const label = tr.querySelector(\"th, td[data-th]\");\n    const value = tr.querySelector(\"td.amount .price, .price\");\n    if (label && value) totals[(label.getAttribute(\"data-th\") || label.textContent.trim()).trim()] = value.textContent.trim();\n  }\n  const orderDate = document.querySelector(\".order-date > span:not(.label)\")?.textContent.trim() || \"\";\n  if (!rows.length) errors.push(\"order-detail-items-empty-or-selector-mismatch\");\n  const completeItem = item => Boolean(item.name && item.sku && item.subtotal);\n  if (items.some(item => !completeItem(item))) errors.push(\"required-item-field-missing\");\n  return {\n    actionId: \"read_order_detail_items_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    orderDate,\n    totals,\n    itemCount: items.length,\n    items: items.map(item => ({ ...item, evidenceStatus: completeItem(item) ? \"verified\" : \"evidence_incomplete\" })),\n    errors\n  };\n}",
+          "requiredOutput": {
+            "actionId": "read_order_detail_items_v1",
+            "requiredKeys": [
+              "ok",
+              "evidenceStatus",
+              "pageId",
+              "orderDate",
+              "totals",
+              "itemCount",
+              "items",
+              "errors"
+            ],
+            "itemKeys": [
+              "name",
+              "sku",
+              "price",
+              "qty",
+              "subtotal",
+              "evidenceStatus"
+            ],
+            "okWhen": [
+              "errors is empty",
+              "itemCount equals items.length",
+              "each item has name, sku and item subtotal"
+            ]
+          }
         }
       ],
       "finalStateGate": {
@@ -141,8 +187,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -180,6 +240,21 @@
           "forms": [],
           "visualAnchors": []
         },
+        "selectionContract": {
+          "entity": "order_set",
+          "preserveTaskConstraints": [
+            "exact_date",
+            "product_category",
+            "status"
+          ],
+          "detailEvidenceRequired": true,
+          "categoryMatch": "match the ordered item's primary category/use; do not include unrelated items from the same order",
+          "amountFieldByConstraint": {
+            "excludeShippingAndHandling": "item_subtotal",
+            "includeShippingAndHandling": "grand_total"
+          },
+          "aggregation": "sum only accepted item lines after exact date/category/status checks"
+        },
         "allowedActions": [
           "read_order_history_page_v1",
           "verify_final_state_v1"
@@ -201,6 +276,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -215,7 +291,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -234,6 +311,7 @@
       },
       "allowedActions": [
         "read_order_history_page_v1",
+        "read_order_detail_items_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
@@ -282,7 +360,7 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    recordId: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
           "requiredOutput": {
             "actionId": "read_order_history_page_v1",
             "requiredKeys": [
@@ -310,6 +388,51 @@
               "each order has identity, date, status and detail URL"
             ]
           }
+        },
+        {
+          "actionId": "read_order_detail_items_v1",
+          "kind": "browser.evaluate",
+          "deterministic": true,
+          "scope": "current-order-detail-page",
+          "maxCallsPerPageId": 2,
+          "selectors": {
+            "row": "table#my-orders-table tbody tr",
+            "fields": {
+              "name": "td.col.name",
+              "sku": "td.col.sku",
+              "price": "td.col.price .price, td.col.price",
+              "qty": "td.col.qty",
+              "subtotal": "td.col.subtotal .price, td.col.subtotal"
+            },
+            "totalsLabel": ".block-order-details-view, .order-info"
+          },
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table tbody tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim().replace(/\\s+/g, \" \") || \"\";\n  const items = rows.map(row => ({\n    name: read(row, \"td.col.name\"),\n    sku: read(row, \"td.col.sku\"),\n    price: read(row, \"td.col.price .price, td.col.price\"),\n    qty: read(row, \"td.col.qty\"),\n    subtotal: read(row, \"td.col.subtotal .price, td.col.subtotal\")\n  }));\n  const totals = {};\n  for (const tr of document.querySelectorAll(\"table#my-orders-table tfoot tr\")) {\n    const label = tr.querySelector(\"th, td[data-th]\");\n    const value = tr.querySelector(\"td.amount .price, .price\");\n    if (label && value) totals[(label.getAttribute(\"data-th\") || label.textContent.trim()).trim()] = value.textContent.trim();\n  }\n  const orderDate = document.querySelector(\".order-date > span:not(.label)\")?.textContent.trim() || \"\";\n  if (!rows.length) errors.push(\"order-detail-items-empty-or-selector-mismatch\");\n  const completeItem = item => Boolean(item.name && item.sku && item.subtotal);\n  if (items.some(item => !completeItem(item))) errors.push(\"required-item-field-missing\");\n  return {\n    actionId: \"read_order_detail_items_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    orderDate,\n    totals,\n    itemCount: items.length,\n    items: items.map(item => ({ ...item, evidenceStatus: completeItem(item) ? \"verified\" : \"evidence_incomplete\" })),\n    errors\n  };\n}",
+          "requiredOutput": {
+            "actionId": "read_order_detail_items_v1",
+            "requiredKeys": [
+              "ok",
+              "evidenceStatus",
+              "pageId",
+              "orderDate",
+              "totals",
+              "itemCount",
+              "items",
+              "errors"
+            ],
+            "itemKeys": [
+              "name",
+              "sku",
+              "price",
+              "qty",
+              "subtotal",
+              "evidenceStatus"
+            ],
+            "okWhen": [
+              "errors is empty",
+              "itemCount equals items.length",
+              "each item has name, sku and item subtotal"
+            ]
+          }
         }
       ],
       "finalStateGate": {
@@ -326,8 +449,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -365,6 +502,21 @@
           "forms": [],
           "visualAnchors": []
         },
+        "selectionContract": {
+          "entity": "order_set",
+          "preserveTaskConstraints": [
+            "exact_date",
+            "product_category",
+            "status"
+          ],
+          "detailEvidenceRequired": true,
+          "categoryMatch": "match the ordered item's primary category/use; do not include unrelated items from the same order",
+          "amountFieldByConstraint": {
+            "excludeShippingAndHandling": "item_subtotal",
+            "includeShippingAndHandling": "grand_total"
+          },
+          "aggregation": "sum only accepted item lines after exact date/category/status checks"
+        },
         "allowedActions": [
           "read_order_history_page_v1",
           "verify_final_state_v1"
@@ -386,6 +538,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -400,7 +553,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -449,8 +603,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -508,6 +676,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -522,7 +691,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -593,8 +763,13 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
       },
       "ir": {
         "schemaVersion": 2,
@@ -653,6 +828,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -667,7 +843,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "correct_target_mutation",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
         }
       }
     },
@@ -777,8 +954,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -891,6 +1082,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -905,7 +1097,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -1015,8 +1208,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -1123,6 +1330,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -1137,7 +1345,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -1247,8 +1456,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -1343,6 +1566,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -1357,7 +1581,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -1467,8 +1692,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -1544,6 +1783,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -1558,7 +1798,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -1607,8 +1848,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -1666,6 +1921,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -1680,7 +1936,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -1751,8 +2008,13 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
       },
       "ir": {
         "schemaVersion": 2,
@@ -1811,6 +2073,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -1825,7 +2088,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "correct_target_mutation",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
         }
       }
     },
@@ -1874,8 +2138,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -1940,6 +2218,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -1954,7 +2233,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     },
@@ -2003,8 +2283,22 @@
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "requiredFields": [
+          "answer",
+          "evidenceRecordIds",
+          "filters",
+          "amountField",
+          "ledger"
+        ],
+        "failureAction": "reject_success_or_fallback"
       },
       "ir": {
         "schemaVersion": 2,
@@ -2062,6 +2356,7 @@
               "The current URL must match the selected candidate URL for NAVIGATE tasks.",
               "The current page title or target object text must prove the requested object identity.",
               "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
               "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
             ]
           },
@@ -2076,7 +2371,8 @@
           "lifecycleGate": "verify_final_state_v1",
           "targetGate": "target_identity_verified",
           "mutationGate": "not_applicable",
-          "postStateGate": "post_state_verified"
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
         }
       }
     }

@@ -43,7 +43,7 @@
 
 ## 已验证入口
 
-- 当前抓取范围没有覆盖该流程；先用页面语义探索，不要臆造 selector。
+- Order # 000000148：`/sales/order/view/order_id/148/`；[页面快照](../../snapshots/pages/31-order-view-148.json)
 
 ## 操作锚点
 

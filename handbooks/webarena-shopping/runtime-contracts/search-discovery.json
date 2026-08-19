@@ -14,6 +14,19 @@
     "target identity and desired state verified",
     "required evidence unavailable: stop without SUCCESS"
   ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "verifyAnswerEvidence",
+    "enforcement": "observe",
+    "requiredFields": [
+      "answer",
+      "evidenceRecordIds",
+      "filters",
+      "amountField",
+      "ledger"
+    ],
+    "failureAction": "reject_success_or_fallback"
+  },
   "contractAction": {
     "tool": "localweb_contract_action",
     "actionId": "read_current_list_page_v1",

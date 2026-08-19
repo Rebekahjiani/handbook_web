@@ -152,7 +152,110 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "order-aggregation",
-      "reason": "订单筛选、金额聚合与退款"
+      "reason": "订单筛选、金额聚合与退款",
+      "capability_signature": {
+        "entity": "order",
+        "operations": [
+          "aggregate",
+          "lookup"
+        ],
+        "selection": [
+          {
+            "field": "purchase_date",
+            "operator": "latest"
+          },
+          {
+            "field": "status",
+            "operator": "exists"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "pending"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "processing"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "completed"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "canceled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "refunded"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "canceled"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "eq"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "range"
+          },
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "purchase_date",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          },
+          {
+            "field": "grand_total",
+            "type": "number"
+          },
+          {
+            "field": "item_subtotal",
+            "type": "number"
+          },
+          {
+            "field": "order_count",
+            "type": "number"
+          },
+          {
+            "field": "amount",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [
+          "detail_url"
+        ],
+        "requiresDetail": true
+      }
     },
     {
       "site_keys": [
@@ -169,7 +272,94 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "order-lookup",
-      "reason": "订单查找与已购商品属性"
+      "reason": "订单查找与已购商品属性",
+      "capability_signature": {
+        "entity": "order",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "purchase_date",
+            "operator": "latest"
+          },
+          {
+            "field": "status",
+            "operator": "exists"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "pending"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "processing"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "completed"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "canceled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "refunded"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "canceled"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "eq"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "range"
+          },
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "purchase_date",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [
+          "detail_url"
+        ],
+        "requiresDetail": true
+      }
     },
     {
       "site_keys": [
@@ -186,7 +376,8 @@
       "runtime_mode": "contract_only",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "reviews",
-      "reason": "商品详情与评论"
+      "reason": "商品详情与评论",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -203,7 +394,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "account-forms",
-      "reason": "账户、地址与表单"
+      "reason": "账户、地址与表单",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -220,7 +412,8 @@
       "runtime_mode": "contract_only",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "category-navigation",
-      "reason": "分类页导航与价格过滤"
+      "reason": "分类页导航与价格过滤",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -237,7 +430,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "catalog-aggregation",
-      "reason": "商品集合、名称与价格聚合"
+      "reason": "商品集合、名称与价格聚合",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -254,7 +448,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "product-selection",
-      "reason": "满足约束的最优商品选择"
+      "reason": "满足约束的最优商品选择",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -271,7 +466,8 @@
       "runtime_mode": "contract_only",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "search-discovery",
-      "reason": "通用搜索、筛选与商品发现"
+      "reason": "通用搜索、筛选与商品发现",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -288,7 +484,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "read-content",
-      "reason": "读取列表、详情与结构化数据"
+      "reason": "读取列表、详情与结构化数据",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -305,7 +502,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "edit-submit",
-      "reason": "创建、修改与提交"
+      "reason": "创建、修改与提交",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -322,7 +520,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "navigation",
-      "reason": "页面导航"
+      "reason": "页面导航",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -339,7 +538,8 @@
       "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "other",
-      "reason": "未归类任务"
+      "reason": "未归类任务",
+      "capability_signature": null
     },
     {
       "site_keys": [

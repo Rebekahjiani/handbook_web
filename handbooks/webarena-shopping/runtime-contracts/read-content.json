@@ -12,5 +12,18 @@
   "stopConditions": [
     "target identity and desired state verified",
     "required evidence unavailable: stop without SUCCESS"
-  ]
+  ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "verifyAnswerEvidence",
+    "enforcement": "observe",
+    "requiredFields": [
+      "answer",
+      "evidenceRecordIds",
+      "filters",
+      "amountField",
+      "ledger"
+    ],
+    "failureAction": "reject_success_or_fallback"
+  }
 }
