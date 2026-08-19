@@ -262,7 +262,7 @@ Baseline 可以重新运行。
 
 ### 版本冻结与恢复
 
-- 实验依赖的版本（ArtifactTrace commit、生成器脚本、execution-contract、agent/settings 配置）一旦冻结，任何后续改动都视为新版本，不得静默替换冻结版本。
-- 修改冻结版本前先评估影响：改完是否还能复现冻结时的结果（tlaic merge 曾改写 `is_tool_allowed` 签名，导致 contract action 白名单失效，属于版本漂移事故）。
+- 实验依赖的版本（ArtifactTrace commit、生成器脚本、execution-contract、agent/settings 配置）冻结后，后续优化改动**直接覆盖旧版本**，不做多版本并存，避免冗余文件；旧版本仍可通过 git 历史追溯。
+- 修改冻结版本前先评估影响：改完是否还能复现冻结时的结果（tlaic merge 曾改写 `is_tool_allowed` 签名，导致 contract action 白名单失效，属于版本漂移事故）。若新版本效果不如旧版本（准确率/tokens/稳定性回退），回退到旧版本并记录原因。
 - 源码丢失时优先查 git 对象库（`git rev-list --all --objects` + `git cat-file`），不要直接放弃或反编译；恢复的文件必须提交 git，并在 Commit Message 注明来源 commit（如 `45213a2f`、`d40d5d27`）。
 - 从快照恢复的实验 runner/工具，必须用实验手册里的原参数（如 `--contract-audit-mode observe`）做一次 smoke 验证，证明恢复结果真实可用，再提交结论。

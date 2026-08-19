@@ -1017,7 +1017,7 @@ function listReadContract(structures) {
 
 // 页面 selector、表单和结构属于站点适配层；通用运行层只消费这份证据。
 function pageAdapterFor(item) {
-  const adapterAction = item.siteKeys?.includes("shopping")
+  const adapterActions = item.siteKeys?.includes("shopping")
     ? shoppingAdapterFor(item.definition.id, item.modelContext)
     : null;
   const base = item.pageAdapter || {
@@ -1025,15 +1025,15 @@ function pageAdapterFor(item) {
     forms: item.forms || [],
     visualAnchors: item.visualAnchors || [],
   };
-  return adapterAction
-    ? {
-        ...base,
-        actions: [...(base.actions || []), adapterAction],
-        ...(adapterAction.selectionContract
-          ? { selectionContract: adapterAction.selectionContract }
-          : {}),
-      }
-    : base;
+  if (!adapterActions) return base;
+  const actions = adapterActions.actions || [adapterActions];
+  return {
+    ...base,
+    actions: [...(base.actions || []), ...actions],
+    ...(adapterActions.selectionContract
+      ? { selectionContract: adapterActions.selectionContract }
+      : {}),
+  };
 }
 
 function workflowBudgets(definition, hasListAction) {
@@ -1206,6 +1206,7 @@ function hasWorkflowCapabilityEvidence(definition, modelContext) {
 function workflowExecutionContract(item, origin, siteKey) {
   const pageAdapter = pageAdapterFor(item);
   const listAction = listReadContract(pageAdapter.structures) || pageAdapter.actions?.[0] || null;
+  const adapterActions = Array.isArray(pageAdapter.actions) ? pageAdapter.actions : [];
   const mutation = mutationPolicy(item.definition, pageAdapter.forms);
   const finalStateGate = {
     actionId: FINAL_STATE_GATE_ID,
@@ -1236,6 +1237,7 @@ function workflowExecutionContract(item, origin, siteKey) {
     },
     allowedActions: [
       ...(listAction ? [listAction.actionId] : []),
+      ...adapterActions.filter((a) => a.actionId !== listAction?.actionId).map((a) => a.actionId),
       FINAL_STATE_GATE_ID,
     ],
     forbiddenActions: listAction
@@ -1257,7 +1259,7 @@ function workflowExecutionContract(item, origin, siteKey) {
       ? { preflightGuards: item.definition.preflightGuards }
       : {}),
     ...(mutation ? { mutation } : {}),
-    actions: listAction ? [listAction] : [],
+    actions: adapterActions.length ? adapterActions : listAction ? [listAction] : [],
     finalStateGate,
     answerEvidenceGate: mutation
       ? { requiredBefore: "SUCCESS", mode: "not_applicable" }
