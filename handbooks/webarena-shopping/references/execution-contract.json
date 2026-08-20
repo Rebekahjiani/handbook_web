@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-19T09:02:59.709Z",
+  "generatedAt": "2026-08-20T01:30:24.625Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -248,12 +248,12 @@
             "status"
           ],
           "detailEvidenceRequired": true,
-          "categoryMatch": "match the ordered item's primary category/use; do not include unrelated items from the same order",
+          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
           "amountFieldByConstraint": {
             "excludeShippingAndHandling": "item_subtotal",
             "includeShippingAndHandling": "grand_total"
           },
-          "aggregation": "sum only accepted item lines after exact date/category/status checks"
+          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
         },
         "allowedActions": [
           "read_order_history_page_v1",
@@ -510,12 +510,12 @@
             "status"
           ],
           "detailEvidenceRequired": true,
-          "categoryMatch": "match the ordered item's primary category/use; do not include unrelated items from the same order",
+          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
           "amountFieldByConstraint": {
             "excludeShippingAndHandling": "item_subtotal",
             "includeShippingAndHandling": "grand_total"
           },
-          "aggregation": "sum only accepted item lines after exact date/category/status checks"
+          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
         },
         "allowedActions": [
           "read_order_history_page_v1",
