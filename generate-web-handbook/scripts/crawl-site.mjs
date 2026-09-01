@@ -967,6 +967,7 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    artifactRoot: siteDir,
     evidenceOnly: independentExploration,
     ...(workflowDefs ? { workflowDefs } : {}),
   });

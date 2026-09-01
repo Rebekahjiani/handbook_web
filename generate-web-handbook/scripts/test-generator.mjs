@@ -131,7 +131,12 @@ const generated = buildWorkflowHandbook({
     },
   ],
   contextModel,
+  artifactRoot: "/tmp/example-handbook",
 });
+assert.ok(!generated.handbook.includes("覆盖语料："));
+assert.ok(!generated.handbook.includes("本轮重点任务："));
+assert.ok(generated.handbook.includes("原始 trace：`fixture/platform-core/dev`"));
+assert.ok(generated.handbook.includes("能力路由：`/tmp/example-handbook/router.json`"));
 
 const shoppingContextModel = {
   ...contextModel,
@@ -361,8 +366,78 @@ assert.ok(
 );
 assert.ok(
   generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
-    "不得为了寻找侧栏品牌筛选器而切换到宽泛分类页",
+    "CATEGORY_ASC_BOUNDARY",
   ),
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "不得插入菜单枚举、自定义列表 evaluate",
+  ),
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "不得手工改写、补全或修正标点",
+  ),
+);
+assert.ok(
+  generated.router.capabilities.some(
+    (candidate) => candidate.route === "catalog-aggregation" &&
+      candidate.signature.outputs.some((field) => field.field === "names" && field.type === "array"),
+  ),
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].queryPlan
+    .strategyByOutput.extremaOnly.strategy,
+  "category-boundary-proof",
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].queryPlan
+    .strategyByOutput.completeCollection.strategy,
+  "brand-search-category-facet",
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].queryPlan
+    .actionBudget.menuEnumerationMax,
+  0,
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "仍没有产品类型的精确 facet",
+  ),
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "`wireless` 不能替代 `Bluetooth`",
+  ),
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].answerEvidenceGate
+    .responseField,
+  "evidence_ledger",
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].answerEvidenceGate
+    .submitActionId,
+  "submit_answer_evidence_v1",
+);
+assert.ok(
+  generated.executionContract.workflows["catalog-aggregation"].actions.some(
+    (action) => action.actionId === "submit_answer_evidence_v1" && action.kind === "evidence.submit",
+  ),
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "最终 JSON 只保留 benchmark 要求的字段",
+  ),
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "`filters` 和 `ledger` 必须是对象",
+  ),
+);
+assert.ok(
+  generated.executionContract.workflows["catalog-aggregation"].answerEvidenceGate
+    .submissionSchema.properties.evidence_ledger.required.includes("result"),
 );
 assert.ok(
   generated.runtimeSkills["product-selection/SKILL.md"].includes(
@@ -408,7 +483,11 @@ assert.equal(
 );
 assert.equal(
   generated.executionContract.workflows["order-aggregation"].actions.length,
-  0,
+  1,
+);
+assert.equal(
+  generated.executionContract.workflows["order-aggregation"].actions[0].actionId,
+  "submit_answer_evidence_v1",
 );
 const orderIR = generated.executionContract.workflows["order-aggregation"].ir;
 assert.equal(orderIR.schemaVersion, 2);
@@ -430,6 +509,28 @@ assert.ok(
   shoppingGenerated.runtimeSkills["order-aggregation/SKILL.md"].includes(
     '"excludeShippingAndHandling":"item_subtotal"',
   ),
+);
+assert.ok(
+  generated.runtimeSkills["order-aggregation/SKILL.md"].includes(
+    "NOT_FOUND_ERROR",
+  ),
+);
+assert.ok(
+  generated.runtimeSkills["order-aggregation/SKILL.md"].includes(
+    "Canceled 和 Refunded",
+  ),
+);
+assert.deepEqual(
+  shoppingGenerated.executionContract.workflows["order-aggregation"].aggregationPolicy.spent.excludeStatuses,
+  ["Canceled", "Cancelled", "Refunded"],
+);
+assert.equal(
+  shoppingGenerated.executionContract.workflows["order-aggregation"].responseContract.onNotFound.retrievedData,
+  null,
+);
+assert.ok(
+  shoppingGenerated.router.capabilities.find((item) => item.route === "order-aggregation")
+    .signature.outputs.some((item) => item.field === "month"),
 );
 const orderPreflightGuards =
   generated.executionContract.workflows["order-aggregation"].preflightGuards;

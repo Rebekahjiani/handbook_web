@@ -24,6 +24,8 @@ function emptyModel(source) {
     actions: [],
     locators: [],
     bindings: [],
+    unresolved: [],
+    freeze: null,
   };
 }
 
@@ -94,6 +96,13 @@ async function loadDirectory(directory) {
     const document = await readJson(formalBindingsFile);
     if (Array.isArray(document.bindings)) model.bindings.push(...document.bindings);
   }
+  const validationFile = path.join(directory, "context-model", "validation-report.json");
+  if (await exists(validationFile)) {
+    const document = await readJson(validationFile);
+    model.unresolved.push(...(document.unresolved_items || []));
+  }
+  const freezeFile = path.join(directory, "context-model", "context-model.freeze.json");
+  if (await exists(freezeFile)) model.freeze = await readJson(freezeFile);
   return model;
 }
 
@@ -130,6 +139,7 @@ export async function loadContextModel(source) {
     "actions",
     "locators",
     "bindings",
+    "unresolved",
   ]) {
     model[key] = deduplicate(model[key], "id");
   }
@@ -151,7 +161,24 @@ function semanticText(item, fields) {
   return fields.flatMap((field) => item?.[field] || []).join(" ");
 }
 
-export function contextForWorkflow(model, terms = []) {
+function semanticTokens(value) {
+  return new Set(
+    String(value || "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 4)
+      .map((token) => token.endsWith("s") ? token.slice(0, -1) : token),
+  );
+}
+
+function limitationMatchesCapabilities(item, capabilityIds) {
+  const limitationTokens = semanticTokens(`${item?.id || ""} ${item?.impact || ""}`);
+  return capabilityIds.some((id) =>
+    [...semanticTokens(id)].some((token) => limitationTokens.has(token)),
+  );
+}
+
+export function contextForWorkflow(model, terms = [], capabilityIds = []) {
   if (!model || !terms.length) {
     return {
       objects: [],
@@ -161,8 +188,24 @@ export function contextForWorkflow(model, terms = []) {
       actions: [],
       locators: [],
       bindings: [],
+      limitations: [],
     };
   }
+  const hasFormalBindings = (model.bindings || []).some(
+    (binding) => binding.capability_id,
+  );
+  const capabilityIdSet = new Set(hasFormalBindings ? capabilityIds : []);
+  const supportedBindings = (model.bindings || []).filter(
+    (binding) =>
+      binding.status === "supported" &&
+      capabilityIdSet.has(binding.capability_id),
+  );
+  const boundSurfaceIds = new Set(
+    supportedBindings.map((binding) => binding.surface_id).filter(Boolean),
+  );
+  const boundActionIds = new Set(
+    supportedBindings.flatMap((binding) => binding.platform_action_ids || []),
+  );
   const objectIds = new Set(
     model.objects
       .filter((item) =>
@@ -172,7 +215,9 @@ export function contextForWorkflow(model, terms = []) {
   );
   const capabilities = model.capabilities.filter(
     (item) =>
-      includesTerm(
+      capabilityIdSet.size
+        ? capabilityIdSet.has(item.id)
+        : includesTerm(
         semanticText(item, [
           "id",
           "object_ids",
@@ -195,7 +240,9 @@ export function contextForWorkflow(model, terms = []) {
   );
   const surfaces = model.surfaces
     .filter((item) =>
-      includesTerm(
+      boundSurfaceIds.size
+        ? boundSurfaceIds.has(item.id)
+        : includesTerm(
         semanticText(item, [
           "id",
           "url_pattern",
@@ -213,7 +260,9 @@ export function contextForWorkflow(model, terms = []) {
     }));
   const actions = model.actions
     .filter((item) =>
-      includesTerm(
+      boundActionIds.size
+        ? boundActionIds.has(item.id)
+        : includesTerm(
         semanticText(item, [
           "id",
           "target_locator_id",
@@ -263,14 +312,16 @@ export function contextForWorkflow(model, terms = []) {
       scope: item.scope,
       status: item.verification_status,
     }));
-  const bindings = (model.bindings || []).filter((binding) =>
-    (binding.surfaces || []).some((surface) =>
-      includesTerm(semanticText(surface, ["id", "url_pattern", "required_field_ids"]), terms),
-    ) || includesTerm(
-      semanticText(binding, ["id", "capability_id", "surface_id"]),
-      terms,
-    ),
-  );
+  const bindings = capabilityIdSet.size
+    ? supportedBindings
+    : (model.bindings || []).filter((binding) =>
+        (binding.surfaces || []).some((surface) =>
+          includesTerm(semanticText(surface, ["id", "url_pattern", "required_field_ids"]), terms),
+        ) || includesTerm(
+          semanticText(binding, ["id", "capability_id", "surface_id"]),
+          terms,
+        ),
+      );
   return {
     objects: model.objects
       .filter((item) => objectIds.has(item.id))
@@ -287,12 +338,18 @@ export function contextForWorkflow(model, terms = []) {
         inputs: item.inputs || [],
         outputs: item.outputs || [],
         contexts: item.requires_context_ids || [],
+        businessConditions: item.business_conditions || [],
       }))
       .slice(0, 3),
     surfaces: surfaces.slice(0, 2),
     actions: actions.slice(0, 3),
     locators: locators.slice(0, 7),
     bindings,
+    limitations: (model.unresolved || []).filter((item) =>
+      capabilityIds.length
+        ? limitationMatchesCapabilities(item, capabilityIds)
+        : includesTerm(semanticText(item, ["id", "impact"]), terms),
+    ),
   };
 }
 

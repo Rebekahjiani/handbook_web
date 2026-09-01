@@ -36,7 +36,8 @@ node generate-web-handbook/scripts/crawl-site.mjs \
   --coverage-corpus /path/to/full-task-corpus.json \
   --focus-tasks /path/to/current-failures.json \
   --site-key shopping \
-  --context-model /path/to/context-model-workspace
+  --context-model /path/to/context-model-workspace \
+  --execution-contract-seed /path/to/verified/execution-contract.json
 ```
 
 `--coverage-corpus` 决定工作流库存和 router 覆盖；`--focus-tasks` 只决定本轮抓取
@@ -56,9 +57,14 @@ node generate-web-handbook/scripts/crawl-site.mjs \
 允许动作、列表页确定性 evaluate 模板、查询预算和 SUCCESS 前的 CDP 最终状态闸门；
 运行时应以这个 JSON 为强制来源，Markdown 只作为解释层。
 
-`--context-model` 也为可选。它只读取正式的 `business-core/` 与
-`platform-core/bindings/`，把与当前工作流相关的对象、能力、页面状态、动作和
-已验证 selector 裁成小型摘录。陌生网站没有 Context Model 时，生成流程不受影响。
+`--context-model` 也为可选。它只读取正式的 `business-core/`、
+`platform-core/surfaces/` 与 `context-model/capability-bindings.json`，把与当前
+工作流相关的对象、能力、页面状态和动作裁成小型摘录。只有 `supported` binding
+才能发布 capability signature；证据不足的 workflow 保持 fallback。
+
+若正式 Context Model 只有语义动作、没有 selector/JS 级 executable binding，可用
+`--execution-contract-seed` 显式复用已经验证的机器执行契约。生成产物会记录 seed
+路径与 SHA-256；禁止把 seed 动作伪装成新 Context Model 自身生成的证据。
 
 生成器会在写入前执行 router 门禁：覆盖语料必须 `0 unmatched`，最后始终保留通用
 fallback；如果新 router 删除旧路线则停止，只有显式传入

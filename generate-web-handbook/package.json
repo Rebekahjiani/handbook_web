@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node scripts/test-generator.mjs && node scripts/test-contract-evidence.mjs && node scripts/replay-contracts.mjs && node scripts/contract-action-replay.mjs",
-    "rebuild": "node scripts/rebuild-from-snapshots.mjs"
+    "rebuild": "node scripts/rebuild-from-snapshots.mjs",
+    "trace:shopping": "node scripts/webarena-shopping-trace-driver.mjs"
   },
   "dependencies": {
     "playwright": "1.62.0"

@@ -56,6 +56,83 @@ const boundedEnglishMonth = parseTaskRequirements("Find orders on March 3, 2023"
 assert.equal(boundedEnglishMonth.selection.some((item) => item.operator === "eq" && item.field === "purchase_date"), true);
 const amountRequirements = parseTaskRequirements("Count complete orders over the past four months and return the total amount including shipping");
 assert.deepEqual(amountRequirements.amount_semantics, { field: "grand_total", includes: ["shipping", "handling"] });
+const cheapestRequirements = parseTaskRequirements("Find the least expensive product");
+assert.deepEqual(cheapestRequirements.selection, [{ field: "price", operator: "min" }]);
+const priceRangeRequirements = parseTaskRequirements("What is the price range of wireless earphone? Return min and max without additional details.");
+assert.equal(priceRangeRequirements.entity, "product");
+assert.equal(priceRangeRequirements.operation, "aggregate");
+assert.equal(priceRangeRequirements.requires_detail, false);
+assert.deepEqual(priceRangeRequirements.outputs, [{ field: "min", type: "number" }, { field: "max", type: "number" }]);
+const catalogRouter = {
+  capabilities: [{
+    route: "catalog-aggregation",
+    signature: {
+      entity: "product",
+      operations: ["aggregate", "lookup"],
+      selection: [],
+      outputs: [
+        { field: "product_name", type: "string" },
+        { field: "names", type: "array" },
+        { field: "min", type: "number" },
+        { field: "max", type: "number" },
+      ],
+      executionDependencies: [],
+      requiresDetail: false,
+    },
+  }],
+};
+const completeCatalogRequirements = parseTaskRequirements(
+  'Provide the full names and price range for Bluetooth headphones. Return an object with keys "names", "min" and "max" only.',
+  { results_schema: { type: "array", items: { type: "object", properties: { names: { type: "array" }, min: { type: "number" }, max: { type: "number" } } } } },
+);
+assert.deepEqual(completeCatalogRequirements.required_fields, ["names", "min", "max"]);
+assert.equal(routeByCapability(completeCatalogRequirements, catalogRouter).route, "catalog-aggregation");
+const orderAggregationRouter = {
+  capabilities: [{
+    route: "order-aggregation",
+    signature: {
+      entity: "order",
+      operations: ["aggregate", "lookup"],
+      selection: [
+        { field: "status", operator: "eq", value: "canceled" },
+        { field: "status", operator: "neq", value: "canceled" },
+        { field: "status", operator: "neq", value: "refunded" },
+        { field: "purchase_date", operator: "range" },
+      ],
+      outputs: [
+        { field: "status", type: "string" },
+        { field: "grand_total", type: "number" },
+        { field: "month", type: "string" },
+        { field: "total", type: "number" },
+      ],
+      executionDependencies: ["detail_url"],
+      requiresDetail: true,
+    },
+  }],
+};
+const refundRequirements = parseTaskRequirements(
+  "How much refund should I expect from my orders canceled, if any, in April 2022, including shipping fee?",
+);
+assert.equal(refundRequirements.operation, "aggregate");
+assert.equal(routeByCapability(refundRequirements, orderAggregationRouter).route, "order-aggregation");
+const monthlySpendRequirements = parseTaskRequirements(
+  'Return the total amount I spent each month from Jan to March 31, 2023, excluding shipping. Return objects with keys "month" and "total".',
+  { results_schema: { type: "array", items: { type: "object", properties: { month: { type: "string" }, total: { type: "number" } } } } },
+);
+assert.deepEqual(monthlySpendRequirements.unknown_requirements, []);
+assert.deepEqual(monthlySpendRequirements.amount_semantics, { field: "item_subtotal", excludes: ["shipping", "handling"] });
+assert.equal(monthlySpendRequirements.selection.some((item) => item.field === "purchase_date" && item.operator === "range"), true);
+assert.equal(monthlySpendRequirements.selection.some((item) => item.field === "purchase_date" && item.operator === "eq"), false);
+assert.equal(monthlySpendRequirements.selection.some((item) => item.field === "status" && item.operator === "neq" && item.value === "canceled"), true);
+assert.equal(monthlySpendRequirements.selection.some((item) => item.field === "status" && item.operator === "neq" && item.value === "refunded"), true);
+assert.equal(routeByCapability(monthlySpendRequirements, orderAggregationRouter).route, "order-aggregation");
+assert.equal(parseTaskRequirements("Add a toothpaste to my wish list").entity, "cart");
+assert.equal(parseTaskRequirements("Buy this product").entity, "checkout");
+assert.equal(parseTaskRequirements("Update my account information").entity, "account");
+assert.deepEqual(
+  parseTaskRequirements("Add the product with the lowest per unit price to the cart").selection,
+  [{ field: "price", operator: "min" }],
+);
 const coverage = auditCapabilityCoverage([
   { task_id: 1, intent: "Find the latest pending order and return the grand total" },
   { task_id: 2, intent: "Find the latest Reddit post" },

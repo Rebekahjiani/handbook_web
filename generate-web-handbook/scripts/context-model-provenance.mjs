@@ -13,17 +13,39 @@ export function sha256Value(value) {
 }
 
 export function sha256File(file) {
-  if (fs.statSync(file).isFile()) return sha256Value(fs.readFileSync(file));
+  const updateFile = (hash, target) => {
+    const descriptor = fs.openSync(target, "r");
+    const buffer = Buffer.allocUnsafe(1024 * 1024);
+    try {
+      let bytesRead;
+      do {
+        bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+        if (bytesRead) hash.update(buffer.subarray(0, bytesRead));
+      } while (bytesRead);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  };
+  if (fs.statSync(file).isFile()) {
+    const hash = crypto.createHash("sha256");
+    updateFile(hash, file);
+    return hash.digest("hex");
+  }
   const files = [];
   const walk = (directory) => {
     for (const name of fs.readdirSync(directory).sort()) {
       const full = `${directory}/${name}`;
       if (fs.statSync(full).isDirectory()) walk(full);
-      else files.push([full.slice(file.length + 1), fs.readFileSync(full).toString("base64")]);
+      else files.push([full.slice(file.length + 1), full]);
     }
   };
   walk(file);
-  return sha256Value(files);
+  const hash = crypto.createHash("sha256");
+  for (const [relative, full] of files) {
+    hash.update(`${Buffer.byteLength(relative)}:${relative}:`);
+    updateFile(hash, full);
+  }
+  return hash.digest("hex");
 }
 
 function artifact(path, sha256) {

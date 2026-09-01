@@ -1,10 +1,14 @@
 const DEFAULT_VOCABULARY = {
-  order: /\b(?:order|orders|purchase|purchases|shipping|delivery|invoice)\b|订单|购买|配送|发票/i,
+  checkout: /\b(?:buy|checkout|place (?:an? )?order)\b|购买|结账|下单/i,
+  cart: /\b(?:shopping cart|cart|wishlist|wish list)\b|购物车|愿望单|收藏/i,
+  order: /\b(?:order|orders|purchase|purchases|bought|shipping|delivery|invoice|refund)\b|订单|购买|配送|发票|退款/i,
+  account: /\b(?:log in|login|sign in|register|account|profile|contact|newsletter|form|my address|my information)\b|登录|注册|账户|个人信息|联系表单|我的地址/i,
   product: /\b(?:product|products|item|items|model|models)\b|商品|产品|型号/i,
+  catalog: /\b(?:category page|browse products|catalog)\b|分类页|浏览商品|目录/i,
   review: /\b(?:review|reviews|reviewer|rating|stars?)\b|评论|评分/i,
   lookup: /\b(?:find|get|show|what is|which|retrieve|look up|查询|查找|读取)\b/i,
-  aggregate: /\b(?:how many|total|amount|spent|sum|count|each month|每月|总额|金额|数量|合计)\b/i,
-  mutate: /\b(?:create|add|edit|update|delete|remove|submit|send|post|publish|save|subscribe)\b|创建|编辑|删除|提交|发布|保存/i,
+  aggregate: /\b(?:how many|how much|total|amount|spent|sum|count|refund|each month|每月|总额|金额|数量|合计|退款)\b/i,
+  mutate: /\b(?:buy|checkout|place (?:an? )?order|create|add|edit|update|delete|remove|submit|send|post|publish|save|subscribe|fill|log in|login|sign in|register)\b|购买|结账|下单|创建|添加|编辑|更新|删除|提交|发布|保存|填写|登录|注册/i,
   latest: /\b(?:latest|most recent|recent|last|first)\b|最近|最新|上一笔/i,
   status: /\b(?:pending|processing|completed|complete|cancelled|canceled|refunded|status)\b|待处理|处理中|已完成|取消|退款|状态/i,
   exactDate: /\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\b|具体日期|某天/i,
@@ -13,10 +17,19 @@ const DEFAULT_VOCABULARY = {
   grandTotal: /\b(?:grand total|including shipping|including handling|total paid|total amount)\b|含运费|含手续费|总支付/i,
   itemSubtotal: /\b(?:item subtotal|excluding shipping|excluding handling|before shipping)\b|不含运费|商品小计/i,
   detail: /\b(?:detail|details|line item|item row|product in the order)\b|详情|明细|商品行/i,
+  leastExpensive: /\b(?:least expensive|lowest (?:per unit )?price|cheapest)\b|最便宜|最低价/i,
+  mostExpensive: /\b(?:most expensive|highest (?:per unit )?price)\b|最贵|最高价/i,
+  priceRange: /\bprice range\b|价格范围/i,
 };
 
-const RANGE_BOUND = /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i;
+const RANGE_BOUND = /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|year|month|week|day)\b/i;
 const RANGE_BOUND_MONTH = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+const MONTH_ATOM = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{1,2}(?:st|nd|rd|th)?)?(?:,?\s+\d{4})?`;
+const EXPLICIT_DATE_RANGE = new RegExp(
+  String.raw`\b(?:from\s+(?:the\s+)?${MONTH_ATOM}\s+(?:to|through|until)\s+(?:the\s+)?${MONTH_ATOM}|between\s+(?:the\s+)?${MONTH_ATOM}\s+and\s+(?:the\s+)?${MONTH_ATOM})\b`,
+  "i",
+);
+const CALENDAR_MONTH = new RegExp(String.raw`\bin\s+(?:the\s+)?${MONTH_ATOM}\b`, "i");
 
 function normalize(value) {
   return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -83,16 +96,24 @@ export function parseTaskRequirements(intent, metadata = {}, options = {}) {
   const vocabulary = options.vocabulary || DEFAULT_VOCABULARY;
   const text = normalize(intent);
   const selectionText = text.replace(/\btoday is\b[^.?!]+[.?!]?/i, "");
-  const entity = matches(text, vocabulary.order)
-    ? "order"
+  const entity = matches(text, vocabulary.checkout)
+    ? "checkout"
+    : matches(text, vocabulary.cart)
+      ? "cart"
+      : matches(text, vocabulary.order)
+        ? "order"
     : matches(text, vocabulary.review)
       ? "review"
-      : matches(text, vocabulary.product)
+      : matches(text, vocabulary.account)
+        ? "account"
+      : matches(text, vocabulary.catalog)
+        ? "catalog"
+      : matches(text, vocabulary.product) || matches(text, vocabulary.priceRange)
         ? "product"
         : null;
   const operation = matches(text, vocabulary.mutate)
     ? "mutate"
-    : matches(text, vocabulary.aggregate)
+    : matches(text, vocabulary.aggregate) || matches(text, vocabulary.priceRange)
       ? "aggregate"
       : matches(text, vocabulary.lookup)
         ? "lookup"
@@ -107,30 +128,43 @@ export function parseTaskRequirements(intent, metadata = {}, options = {}) {
       ? { field: "status", operator: negated ? "neq" : "eq", value: status.toLowerCase() === "complete" ? "completed" : status.toLowerCase() }
       : { field: "status", operator: "exists" });
   }
-  if (matches(selectionText, vocabulary.exactDate) && /\b(?:on|for|dated|date)\b/i.test(selectionText)) {
+  if (entity === "order" && operation === "aggregate" && /\bspent\b/i.test(text) && !selection.some((item) => item.field === "status")) {
+    selection.push(
+      { field: "status", operator: "neq", value: "canceled" },
+      { field: "status", operator: "neq", value: "refunded" },
+    );
+  }
+  const explicitDateRange = selectionText.match(EXPLICIT_DATE_RANGE)?.[0] || selectionText.match(CALENDAR_MONTH)?.[0] || null;
+  if (!explicitDateRange && matches(selectionText, vocabulary.exactDate) && /\b(?:on|for|dated|date)\b/i.test(selectionText)) {
     const value = parseDateEvidence(selectionText);
     selection.push(value
       ? { field: "purchase_date", operator: "eq", value }
       : { field: "purchase_date", operator: "eq" });
     if (!value) unknownRequirements.push("purchase_date.value");
   }
-  if (matches(selectionText, vocabulary.dateRange)) {
+  if (explicitDateRange || matches(selectionText, vocabulary.dateRange)) {
     const rangeEvidence = selectionText.match(/\b(?:past|last|between|from|before|after|since)\b[^,.!?]*(?:day|days|month|months|year|years|date)\b/i)?.[0] || "";
-    const hasBound = RANGE_BOUND.test(rangeEvidence) || RANGE_BOUND_MONTH.test(rangeEvidence);
+    const hasBound = Boolean(explicitDateRange) || RANGE_BOUND.test(rangeEvidence) || RANGE_BOUND_MONTH.test(rangeEvidence);
     selection.push({ field: "purchase_date", operator: "range", ...(hasBound ? {} : { value: null }) });
     if (!hasBound) unknownRequirements.push("purchase_date.range_bounds");
   }
   if (matches(text, vocabulary.explicitCategory)) selection.push({ field: "product_category", operator: "eq" });
+  if (matches(text, vocabulary.leastExpensive)) selection.push({ field: "price", operator: "min" });
+  if (matches(text, vocabulary.mostExpensive)) selection.push({ field: "price", operator: "max" });
 
   const outputs = inferOutputs(selectionText, metadata);
-  const amountSemantics = matches(text, vocabulary.grandTotal)
-    ? { field: "grand_total", includes: ["shipping", "handling"] }
-    : matches(text, vocabulary.itemSubtotal)
-      ? { field: "item_subtotal", excludes: ["shipping", "handling"] }
+  if (matches(text, vocabulary.priceRange) && !outputs.length) {
+    outputs.push(output("min", "number"), output("max", "number"));
+  }
+  const amountSemantics = matches(text, vocabulary.itemSubtotal)
+    ? { field: "item_subtotal", excludes: ["shipping", "handling"] }
+    : matches(text, vocabulary.grandTotal)
+      ? { field: "grand_total", includes: ["shipping", "handling"] }
       : null;
   if (!entity) unknownRequirements.push("entity");
-  if (selection.some((item) => item.operator === "eq" && item.value == null)) unknownRequirements.push("selection.value");
-  const requiresDetail = matches(text, vocabulary.detail) || (entity === "order" && (operation === "aggregate" || selection.length > 0));
+  if (selection.some((item) => item.operator === "eq" && item.value == null && item.field !== "product_category")) unknownRequirements.push("selection.value");
+  const detailText = text.replace(/without (?:any )?additional details?/g, "");
+  const requiresDetail = matches(detailText, vocabulary.detail) || (entity === "order" && (operation === "aggregate" || selection.length > 0));
   const executionDependencies = requiresDetail ? ["detail_url"] : [];
   return {
     entity,

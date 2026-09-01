@@ -8,7 +8,10 @@ import {
 } from "./task-workflows.mjs";
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
-import { provenanceForContextRoot } from "./context-model-provenance.mjs";
+import {
+  provenanceForContextRoot,
+  sha256File,
+} from "./context-model-provenance.mjs";
 
 async function loadWorkflowDefs(configPath) {
   if (!configPath) return null;
@@ -44,6 +47,65 @@ async function writeJsonAtomic(file, value) {
   const temporary = `${file}.tmp`;
   await fs.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
   await fs.rename(temporary, file);
+}
+
+async function applyExecutionContractSeed(generated, seedFile) {
+  if (!seedFile || !(await pathExists(seedFile))) return [];
+  const eligibleWorkflows = new Set(["order-aggregation", "order-lookup"]);
+  const seed = JSON.parse(await fs.readFile(seedFile, "utf8"));
+  const seedRuntimeDir = path.join(path.dirname(path.dirname(seedFile)), "runtime-contracts");
+  const reused = [];
+  for (const [workflow, current] of Object.entries(generated.executionContract.workflows || {})) {
+    if (!eligibleWorkflows.has(workflow)) continue;
+    const seeded = seed.workflows?.[workflow];
+    const submissionActions = (current.actions || []).filter(
+      (action) => action.kind === "evidence.submit",
+    );
+    const currentReadActions = (current.actions || []).filter(
+      (action) => action.kind !== "evidence.submit",
+    );
+    if (
+      current.contextModel?.supportStatus !== "supported" ||
+      currentReadActions.length ||
+      !(seeded?.actions || []).length
+    ) continue;
+    current.actions = [...seeded.actions, ...submissionActions];
+    current.allowedActions = [
+      ...new Set([
+        ...(seeded.allowedActions || []),
+        ...submissionActions.map((action) => action.actionId),
+      ]),
+    ];
+    current.forbiddenActions = seeded.forbiddenActions || current.forbiddenActions;
+    current.budgets = seeded.budgets || current.budgets;
+    current.preflightGuards = seeded.preflightGuards || current.preflightGuards;
+    current.ir = {
+      ...current.ir,
+      ...(seeded.ir?.selectionContract
+        ? { selectionContract: seeded.ir.selectionContract }
+        : {}),
+      allowedActions: [
+        ...new Set([
+          ...(seeded.ir?.allowedActions || seeded.allowedActions || []),
+          ...submissionActions.map((action) => action.actionId),
+        ]),
+      ],
+    };
+    current.machineEvidenceSeed = {
+      path: seedFile,
+      sha256: sha256File(seedFile),
+      generatedAt: seed.generatedAt || null,
+    };
+    const runtimeFile = path.join(seedRuntimeDir, `${workflow}.json`);
+    if (await pathExists(runtimeFile)) {
+      generated.runtimeContracts[`${workflow}.json`] = {
+        ...JSON.parse(await fs.readFile(runtimeFile, "utf8")),
+        contextModel: current.contextModel,
+      };
+    }
+    reused.push(workflow);
+  }
+  return reused;
 }
 
 function slug(value, fallback = "site") {
@@ -113,6 +175,7 @@ async function main() {
   const coverageCorpusFile = args["coverage-corpus"] || manifest.coverageCorpusFile;
   const focusTasksFile = args["focus-tasks"] || manifest.focusTasksFile || coverageCorpusFile;
   const contextModelPath = args["context-model"] || manifest.contextModelPath;
+  const executionContractSeedPath = args["execution-contract-seed"] || manifest.executionContractSeedPath;
   const coverageTasks = await loadTaskCorpus(coverageCorpusFile, siteKey);
   const focusTasks = await loadTaskCorpus(focusTasksFile, siteKey);
   const contextModel = await loadContextModel(contextModelPath);
@@ -129,9 +192,14 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    artifactRoot: siteDir,
     evidenceOnly: manifest.exploration?.mode === "independent",
     ...(workflowDefs ? { workflowDefs } : {}),
   });
+  const reusedSeedWorkflows = await applyExecutionContractSeed(
+    generated,
+    executionContractSeedPath ? path.resolve(executionContractSeedPath) : null,
+  );
   const previousRouterFile = path.join(siteDir, "router.json");
   const previousRouter = (await pathExists(previousRouterFile))
     ? JSON.parse(await fs.readFile(previousRouterFile, "utf8"))
@@ -166,6 +234,7 @@ async function main() {
       (sum, contract) => sum + contract.actions.length,
       0,
     ),
+    reusedSeedWorkflows,
   };
   if (contextModelPath) {
     generated.coverage.contextModelProvenance = provenanceForContextRoot(
@@ -210,6 +279,12 @@ async function main() {
   manifest.updatedAt = new Date().toISOString();
   if (args["workflow-config"] && !manifest.workflowConfig) {
     manifest.workflowConfig = path.resolve(args["workflow-config"]);
+  }
+  if (args["context-model"]) {
+    manifest.contextModelPath = path.resolve(args["context-model"]);
+  }
+  if (args["execution-contract-seed"]) {
+    manifest.executionContractSeedPath = path.resolve(args["execution-contract-seed"]);
   }
   manifest.summary = {
     ...(manifest.summary || {}),
