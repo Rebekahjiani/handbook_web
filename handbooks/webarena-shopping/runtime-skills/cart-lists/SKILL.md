@@ -1,6 +1,6 @@
 ---
-name: webarena-shopping-account-forms
-description: webarena-shopping 的账户、地址与表单工作流。
+name: webarena-shopping-cart-lists
+description: webarena-shopping 的购物车、愿望单与比较工作流。
 ---
 
 # 运行规则
@@ -11,10 +11,10 @@ description: webarena-shopping 的账户、地址与表单工作流。
 - 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
 - 最终响应服从任务给出的 expected status：若为 `NOT_FOUND_ERROR`，`retrieved_data` 必须是 JSON `null`，不能返回 `[]`、`[0]` 或 `[0.0]`。
 
-# 账户、地址与表单
+# 购物车、愿望单与比较
 
 站点：`http://localhost:7770`
-机器契约：`../../references/execution-contract.json#workflows-account-forms`
+机器契约：`../../references/execution-contract.json#workflows-cart-lists`
 
 ## 前置条件
 
@@ -39,16 +39,15 @@ description: webarena-shopping 的账户、地址与表单工作流。
 
 ## 循环动作
 
-1. 确认当前登录状态和目标表单。
-2. 逐字段填写；优先按标签定位，不依赖字段在页面中的顺序。
-3. 提交前检查必填项、格式和可能的账户副作用。
-4. 提交后验证成功提示或回显值。
+1. 定位目标商品并进入商品卡片或详情页。
+2. 核对名称、规格后执行加入、移除或修改数量。
+3. 打开目标列表，确认操作只影响指定商品。
 
 ## 操作锚点
 
-- My Account：`getByRole("link", { name: "My Account", exact: true })`（confidence=0.85，evidence=unique,scoped）
-- Sign Out：`getByRole("link", { name: "Sign Out", exact: true })`（confidence=0.75，evidence=unique,scoped）
-- Contact Us：`locator("a[href=\"${SITE_ORIGIN}/contact/\"]")`（confidence=0.65，evidence=unique,scoped）
+- Add to Cart：`getByRole("button", { name: "Add to Cart", exact: true })`（confidence=0.95，evidence=unique,scoped）
+- Add to Wish List：`getByRole("link", { name: "Add to Wish List", exact: true })`（confidence=0.95，evidence=unique,scoped）
+- Add to Cart：`locator("li.product-item").filter({ hasText: "<目标项名称>" }).getByRole("button", { name: "Add to Cart", exact: false })`（confidence=0.9，evidence=unique,scoped）
 
 ## 最终状态闸门
 
@@ -57,13 +56,13 @@ description: webarena-shopping 的账户、地址与表单工作流。
 
 ## 完成证明
 
-- 字段值写入了正确输入框。
-- 页面出现明确的保存成功提示或正确回显。
+- 目标列表中出现或消失了正确商品。
+- 数量、规格和提示消息与任务一致。
 
 ## 失败恢复
 
 - selector 失效时重新读取当前页面结构；不要盲点旧坐标或重复同一动作。
 - 候选、分页或页面状态无法证明完整时，保留已有台账并报告缺失证据，不得猜测成功。
 
-风险：注册、修改资料和地址会改变账户状态；没有明确授权时只填写到提交前。
+风险：这是账户写操作。避免清空列表，也不要顺带修改其他商品。
 

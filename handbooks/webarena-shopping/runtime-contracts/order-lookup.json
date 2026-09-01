@@ -50,5 +50,31 @@
     "contractPath": "webarena-shopping/references/execution-contract.json",
     "requiredFirstStep": true,
     "call": "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。"
+  },
+  "contextModel": {
+    "capabilityIds": [
+      "inspect-orders"
+    ],
+    "surfaceIds": [
+      "storefront-orders"
+    ],
+    "actionIds": [
+      "orders-inspect-history",
+      "orders-inspect-detail"
+    ],
+    "evidenceIds": [
+      "orders-empty-history",
+      "orders-single-history-detail",
+      "orders-multiple-history-detail"
+    ],
+    "supportStatus": "supported",
+    "limitations": [
+      {
+        "id": "large-order-history-pagination",
+        "status": "partially_evidenced",
+        "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+      }
+    ],
+    "fallbackOnUnsupported": true
   }
 }

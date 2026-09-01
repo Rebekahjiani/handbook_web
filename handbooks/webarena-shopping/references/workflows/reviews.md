@@ -18,6 +18,10 @@
 - 评论者姓名按评论容器的可见文本原样返回；只去首尾空白，不合并或改写重复文本节点。
 - 最终返回页面观察值；除非任务明确要求文件，否则不要返回快照文件名或路径。
 
+## 站点模型约束
+
+- 业务能力 `inspect-product`：输入 `A product selected from a product collection.`；输出 `Observed product identity, price, descriptive attributes, and review-related state.`；依赖上下文 `catalog-exploration`。
+
 ## 成功判据
 
 - 结果全部来自目标商品，满足评分或文本条件，且已覆盖全部评论分页（末页无 Next 或已达到任务要求的数量上限）。

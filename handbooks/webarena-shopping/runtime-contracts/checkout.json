@@ -1,17 +1,27 @@
 {
-  "workflow": "edit-submit",
+  "workflow": "checkout",
   "routeHints": [],
   "target": {
-    "entity": "edit-submit",
+    "entity": "checkout",
     "identity": "task-target",
     "desiredState": "task-success"
   },
   "contextModel": {
-    "capabilityIds": [],
-    "surfaceIds": [],
-    "actionIds": [],
-    "evidenceIds": [],
-    "supportStatus": "fallback",
+    "capabilityIds": [
+      "submit-purchase"
+    ],
+    "surfaceIds": [
+      "storefront-cart-checkout"
+    ],
+    "actionIds": [
+      "checkout-prepare",
+      "checkout-submit-order"
+    ],
+    "evidenceIds": [
+      "checkout-payment-ready",
+      "checkout-order-confirmed"
+    ],
+    "supportStatus": "supported",
     "limitations": [],
     "fallbackOnUnsupported": true
   },

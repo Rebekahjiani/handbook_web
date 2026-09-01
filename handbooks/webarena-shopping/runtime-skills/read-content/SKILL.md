@@ -9,6 +9,7 @@ description: webarena-shopping 的读取列表、详情与结构化数据工作�
 - 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
 - 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
 - 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
+- 最终响应服从任务给出的 expected status：若为 `NOT_FOUND_ERROR`，`retrieved_data` 必须是 JSON `null`，不能返回 `[]`、`[0]` 或 `[0.0]`。
 
 # 读取列表、详情与结构化数据
 
@@ -35,10 +36,11 @@ description: webarena-shopping 的读取列表、详情与结构化数据工作�
 3. 需要统计时遍历分页并去重；需要详情时保持记录上下文。
 4. 按任务要求的数据结构、类型和格式返回。
 
-## 已验证结构
+## 操作锚点
 
-- `history-row`：`table#my-orders-table.history > tbody > tr`（history-table）
-- `history-detail-link`：`:scope > td[data-th="Actions"] > a.action.view`（history-row）
+- Add to Wish List：`getByRole("link", { name: "Add to Wish List", exact: true })`（confidence=0.95，evidence=unique,scoped）
+- Novelty & More：`getByRole("link", { name: "Novelty & More", exact: true })`（confidence=0.95，evidence=unique）
+- Add to Wish List：`locator("li.product-item").filter({ hasText: "<目标项名称>" }).getByRole("link", { name: "Add to Wish List", exact: false })`（confidence=0.9，evidence=unique,scoped）
 
 ## 最终状态闸门
 

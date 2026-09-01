@@ -9,6 +9,7 @@ description: webarena-shopping 的订单查找与已购商品属性工作流。
 - 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
 - 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
 - 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
+- 最终响应服从任务给出的 expected status：若为 `NOT_FOUND_ERROR`，`retrieved_data` 必须是 JSON `null`，不能返回 `[]`、`[0]` 或 `[0.0]`。
 
 # 订单查找与已购商品属性
 
@@ -29,6 +30,13 @@ description: webarena-shopping 的订单查找与已购商品属性工作流。
 - `accepted_records`：满足时间与状态条件的订单台账
 - `next_href`：唯一待访问的下一页；无下一页时为 `null`
 
+## 答案证据提交
+
+- 最终回答前必须调用一次 `localweb_contract_action`：`action_id=submit_answer_evidence_v1`、`workflow=order-lookup`、`route=shopping`、`contract_path=webarena-shopping/references/execution-contract.json`、`page_id=当前 URL`，并通过 `evidence_ledger` 参数提交台账。
+- `evidence_ledger.evidenceStatus` 仅在所有查询/分页或排序边界证明完成、候选验收完成且结果可由同一台账重算时写 `verified`；同时包含 `result`、非空 `evidenceRecordIds`、实际 `filters` 和含页面来源的 `ledger`。否则不得调用提交动作或声明 SUCCESS。
+- 参数形状固定为 `evidence_ledger={"evidenceStatus":"verified","result":<与最终答案相同的值或对象>,"evidenceRecordIds":["记录ID"],"filters":{"字段":"实际条件"},"ledger":{"records":[{"recordId":"记录ID","pageId":"来源URL","value":"证据值"}]}}`；`filters` 和 `ledger` 必须是对象，不能写成字符串或数组。
+- 提交动作返回 `evidenceLedger` 后，最终 JSON 只保留 benchmark 要求的字段；不要把审计台账塞进 `retrieved_data` 或增加任务未要求的答案字段。
+
 ## 循环动作
 
 1. 先判定任务是单对象查找还是集合查找；进入订单历史并把每页行数据一次性读取为短台账，记录页面身份、行数与 Next。
@@ -47,12 +55,9 @@ description: webarena-shopping 的订单查找与已购商品属性工作流。
 - 无匹配时导航回不带分页参数的订单历史首页，并返回 NOT_FOUND 与 null。
 - 成功判据未被页面证据证明时继续；`next_action` 为空或动作开始重复时停止并进入失败恢复。
 
-## 已验证结构
+## 操作锚点
 
-- `history-row`：`table#my-orders-table.history > tbody > tr`（history-table）
-- `history-purchase-date`：`:scope > td[data-th="Date"]`（history-row）
-- `history-grand-total`：`:scope > td[data-th="Order Total"] .price`（history-row）
-- `history-status`：`:scope > td[data-th="Status"]`（history-row）
+- View All：`locator("a.action[href=\"${SITE_ORIGIN}/customer/account/#my-orders-table\"]")`（confidence=0.65，evidence=unique,scoped）
 
 ## 最终状态闸门
 

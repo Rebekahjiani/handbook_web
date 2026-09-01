@@ -14,7 +14,7 @@
 
 ## 执行检查
 
-- “spent”默认排除 Canceled；退款任务只处理 Canceled，除非任务明确另有状态口径。
+- “spent”默认先排除 Canceled 和 Refunded，再做月份分组或金额求和；退款任务只处理 Canceled/Refunded，除非任务明确另有状态口径。
 - 包含运费时使用 Grand Total；排除运费或按商品类别统计时使用商品小计，不要用 Grand Total。
 - 包含 shipping/handling 时，逐订单同时记录商品小计、shipping、handling、Grand Total 和状态；Grand Total 缺失或未核对时不得用小计代替总额。
 - 金额聚合前逐行复核时间窗口、complete 状态和金额字段；订单数量正确但金额字段缺失仍视为未完成。
@@ -23,19 +23,18 @@
 - 若任务只写 `past months` 但没有数量或上下界，不得扩成全部历史；把时间范围标记为不完整，返回零值对象或阻塞证据，不能猜测 SUCCESS。
 - 进入详情后核对页面订单号；商品类别优先以站点分类和商品用途判断：主用途属于目标类别才计入，名称近似但用途不同的配件不计入。
 - 品类口径（本数据集校准判例）：食品(food/cooking)包含烘焙食品如玉米松饼杂粮粉（corn muffin mix）、即食餐（MRE/beef cholent）、食品饮料（chai、orange juice），以及直接用于食品的装饰如蛋糕装饰配件（cake topper 彩虹生日派对用品）——cake topper 计入 food 类；hair care/style 只包含护理和染发造型产品（conditioner、haircolor/dye），不包含身体护理（body butter、body lotion）和纯装饰配件（发箍 headbands、珠饰发夹）——body butter 与 hairbands 不计入 hair care。
-- 按类别统计时不使用 Canceled 订单中的商品（“spent”语义排除已取消订单），只统计任务要求状态（默认 Complete）的订单；类目金额用于类目内商品小计，包含运费时再加 Grand Total 与 subtotal 之差。
+- 按类别或月份统计时不使用 Canceled/Refunded 订单中的商品（“spent”语义排除未实际支出的订单），先按状态过滤，再分组求和；类目金额用于类目内商品小计，包含运费时再加 Grand Total 与 subtotal 之差。
 - 不能因当前页没有分页控件就断言只有一页；同时核对总记录文本、已访问行数和页面身份。
 - 无匹配记录时严格遵守任务要求的返回类型：对象任务返回对象的零值字段，列表任务才返回空列表，明确 null 协议才返回 null。
 
 ## 站点模型约束
 
-- 业务对象 `order`：字段 `order_number、purchase_date、status、grand_total`。
-- 业务能力 `extract-order-field`：输入 `selected_order_detail_context、requested_field`；输出 `field_value`；依赖上下文 `current-account-order-scope、selected-order-detail-context`。
-- 业务能力 `find-latest-order-matching-status`：输入 `requested_status`；输出 `selected_order、no_matching_order`；依赖上下文 `current-account-order-scope、latest-order-selection-rule`。
-- 页面状态 `storefront-order-history`：URL `^https?://(?:localhost|127\.0\.0\.1):7770/sales/order/history/(?:\?.*)?$`；必须同时观察字段 `order_number、purchase_date、grand_total、status、detail_link`。
-- 页面状态 `storefront-order-detail`：URL `^https?://(?:localhost|127\.0\.0\.1):7770/sales/order/view/order_id/[0-9]+/(?:\?.*)?$`；必须同时观察字段 `order_number、purchase_date、grand_total`。
-- 动作 `advance-order-history-page`：从当前快照重新解析 `pagination-next`，操作后重新验证页面状态与对象身份。
-- 动作 `open-selected-order-detail`：从当前快照重新解析 `history-detail-link`，操作后重新验证页面状态与对象身份。
+- 业务对象 `order`：字段 ``。
+- 业务对象 `order-collection`：字段 ``。
+- 业务能力 `aggregate-orders`：输入 `Order filtering criteria and requested aggregate fields.`；输出 `An aggregate derived from the fully inspected supported order collection.`；依赖上下文 `order-analysis`。
+- 页面状态 `storefront-orders`：URL `undefined`；必须同时观察字段 `无`。
+- 动作 `orders-inspect-history`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
+- 动作 `orders-inspect-detail`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
 
 ## 成功判据
 
@@ -49,17 +48,6 @@
 ## 操作锚点
 
 - View All：`locator("a.action[href=\"${SITE_ORIGIN}/customer/account/#my-orders-table\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
-
-## 模型定位证据
-
-- 下列 selector 用于缩小实时快照范围或核验结构；点击时仍使用当前快照返回的元素引用。
-- `history-row`：`table#my-orders-table.history > tbody > tr`；作用域 `history-table`；verified
-- `history-purchase-date`：`:scope > td[data-th="Date"]`；作用域 `history-row`；verified
-- `history-grand-total`：`:scope > td[data-th="Order Total"] .price`；作用域 `history-row`；verified
-- `history-status`：`:scope > td[data-th="Status"]`；作用域 `history-row`；verified
-- `history-detail-link`：`:scope > td[data-th="Actions"] > a.action.view`；作用域 `history-row`；verified
-- `pagination-next`：`.pages .pages-item-next > a.action.next`；作用域 `document`；verified
-- `detail-grand-total`：`tr.grand_total > td.amount[data-th="Grand Total"] .price`；作用域 `detail-totals`；verified
 
 ## 风险与恢复
 

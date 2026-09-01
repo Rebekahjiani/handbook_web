@@ -1,18 +1,32 @@
 {
-  "workflow": "edit-submit",
+  "workflow": "cart-lists",
   "routeHints": [],
   "target": {
-    "entity": "edit-submit",
+    "entity": "cart-lists",
     "identity": "task-target",
     "desiredState": "task-success"
   },
   "contextModel": {
-    "capabilityIds": [],
-    "surfaceIds": [],
-    "actionIds": [],
-    "evidenceIds": [],
-    "supportStatus": "fallback",
-    "limitations": [],
+    "capabilityIds": [
+      "manage-cart"
+    ],
+    "surfaceIds": [
+      "storefront-cart-checkout"
+    ],
+    "actionIds": [
+      "cart-add-product"
+    ],
+    "evidenceIds": [
+      "cart-add-and-nonempty"
+    ],
+    "supportStatus": "supported",
+    "limitations": [
+      {
+        "id": "empty-cart-state",
+        "status": "not_evidenced",
+        "impact": "Cart capability is limited to the evidenced nonempty state."
+      }
+    ],
     "fallbackOnUnsupported": true
   },
   "allowedActions": [

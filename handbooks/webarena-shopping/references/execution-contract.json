@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-20T01:30:24.625Z",
+  "generatedAt": "2026-09-01T07:40:45.304Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -17,14 +17,74 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/order-aggregation/SKILL.md",
       "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
+      "contextModel": {
+        "capabilityIds": [
+          "aggregate-orders"
+        ],
+        "surfaceIds": [
+          "storefront-orders"
+        ],
+        "actionIds": [
+          "orders-inspect-history",
+          "orders-inspect-detail"
+        ],
+        "evidenceIds": [
+          "orders-multiple-history-detail"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "large-order-history-pagination",
+            "status": "partially_evidenced",
+            "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "aggregationPolicy": {
+        "spent": {
+          "excludeStatuses": [
+            "Canceled",
+            "Cancelled",
+            "Refunded"
+          ],
+          "applyStatusFilterBefore": [
+            "group",
+            "sum"
+          ]
+        },
+        "refund": {
+          "includeStatuses": [
+            "Canceled",
+            "Cancelled",
+            "Refunded"
+          ]
+        }
+      },
       "allowedActions": [
         "read_order_history_page_v1",
         "read_order_detail_items_v1",
-        "verify_final_state_v1"
+        "verify_final_state_v1",
+        "submit_answer_evidence_v1"
       ],
       "forbiddenActions": [
         {
@@ -171,6 +231,24 @@
               "each item has name, sku and item subtotal"
             ]
           }
+        },
+        {
+          "actionId": "submit_answer_evidence_v1",
+          "kind": "evidence.submit",
+          "deterministic": true,
+          "scope": "current-run-answer",
+          "maxCallsPerPageId": 1,
+          "requiredInput": {
+            "requiredKeys": [
+              "evidenceStatus",
+              "result",
+              "evidenceRecordIds",
+              "filters",
+              "ledger"
+            ],
+            "evidenceStatus": "verified",
+            "evidenceRecordIdsMinItems": 1
+          }
         }
       ],
       "finalStateGate": {
@@ -195,13 +273,55 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "submitActionId": "submit_answer_evidence_v1",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -240,24 +360,10 @@
           "forms": [],
           "visualAnchors": []
         },
-        "selectionContract": {
-          "entity": "order_set",
-          "preserveTaskConstraints": [
-            "exact_date",
-            "product_category",
-            "status"
-          ],
-          "detailEvidenceRequired": true,
-          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
-          "amountFieldByConstraint": {
-            "excludeShippingAndHandling": "item_subtotal",
-            "includeShippingAndHandling": "grand_total"
-          },
-          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
-        },
         "allowedActions": [
           "read_order_history_page_v1",
-          "verify_final_state_v1"
+          "verify_final_state_v1",
+          "submit_answer_evidence_v1"
         ],
         "requiredNetworkEvents": [],
         "expectedMutation": null,
@@ -286,6 +392,41 @@
             "desiredState": "evidence_complete"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "aggregationPolicy": {
+          "spent": {
+            "excludeStatuses": [
+              "Canceled",
+              "Cancelled",
+              "Refunded"
+            ],
+            "applyStatusFilterBefore": [
+              "group",
+              "sum"
+            ]
+          },
+          "refund": {
+            "includeStatuses": [
+              "Canceled",
+              "Cancelled",
+              "Refunded"
+            ]
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -293,7 +434,27 @@
           "mutationGate": "not_applicable",
           "postStateGate": "post_state_verified",
           "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        },
+        "selectionContract": {
+          "entity": "order_set",
+          "preserveTaskConstraints": [
+            "exact_date",
+            "product_category",
+            "status"
+          ],
+          "detailEvidenceRequired": true,
+          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
+          "amountFieldByConstraint": {
+            "excludeShippingAndHandling": "item_subtotal",
+            "includeShippingAndHandling": "grand_total"
+          },
+          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
         }
+      },
+      "machineEvidenceSeed": {
+        "path": "/Users/rebekah/handbook_web/experiments/independent-exploration/round-53/contract-root/webarena-shopping/references/execution-contract.json",
+        "sha256": "e36a224946fb5907d81d6952177148359148b8d4f052d7cf331c21fca2320ee0",
+        "generatedAt": "2026-08-20T01:30:24.625Z"
       }
     },
     "order-lookup": {
@@ -305,14 +466,56 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/order-lookup/SKILL.md",
       "intentPattern": "\\borders?\\b|purchase (?:history|date)|(?:first|last|recent) purchase|purchase.*\\bdate\\b|bought|shipping method|billing address|arrival|delivery|cancelled|pending|processing",
+      "contextModel": {
+        "capabilityIds": [
+          "inspect-orders"
+        ],
+        "surfaceIds": [
+          "storefront-orders"
+        ],
+        "actionIds": [
+          "orders-inspect-history",
+          "orders-inspect-detail"
+        ],
+        "evidenceIds": [
+          "orders-empty-history",
+          "orders-single-history-detail",
+          "orders-multiple-history-detail"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "large-order-history-pagination",
+            "status": "partially_evidenced",
+            "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
       "allowedActions": [
         "read_order_history_page_v1",
         "read_order_detail_items_v1",
-        "verify_final_state_v1"
+        "verify_final_state_v1",
+        "submit_answer_evidence_v1"
       ],
       "forbiddenActions": [
         {
@@ -433,6 +636,24 @@
               "each item has name, sku and item subtotal"
             ]
           }
+        },
+        {
+          "actionId": "submit_answer_evidence_v1",
+          "kind": "evidence.submit",
+          "deterministic": true,
+          "scope": "current-run-answer",
+          "maxCallsPerPageId": 1,
+          "requiredInput": {
+            "requiredKeys": [
+              "evidenceStatus",
+              "result",
+              "evidenceRecordIds",
+              "filters",
+              "ledger"
+            ],
+            "evidenceStatus": "verified",
+            "evidenceRecordIdsMinItems": 1
+          }
         }
       ],
       "finalStateGate": {
@@ -457,13 +678,55 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "submitActionId": "submit_answer_evidence_v1",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -502,24 +765,10 @@
           "forms": [],
           "visualAnchors": []
         },
-        "selectionContract": {
-          "entity": "order_set",
-          "preserveTaskConstraints": [
-            "exact_date",
-            "product_category",
-            "status"
-          ],
-          "detailEvidenceRequired": true,
-          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
-          "amountFieldByConstraint": {
-            "excludeShippingAndHandling": "item_subtotal",
-            "includeShippingAndHandling": "grand_total"
-          },
-          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
-        },
         "allowedActions": [
           "read_order_history_page_v1",
-          "verify_final_state_v1"
+          "verify_final_state_v1",
+          "submit_answer_evidence_v1"
         ],
         "requiredNetworkEvents": [],
         "expectedMutation": null,
@@ -548,6 +797,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -555,6 +819,432 @@
           "mutationGate": "not_applicable",
           "postStateGate": "post_state_verified",
           "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        },
+        "selectionContract": {
+          "entity": "order_set",
+          "preserveTaskConstraints": [
+            "exact_date",
+            "product_category",
+            "status"
+          ],
+          "detailEvidenceRequired": true,
+          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
+          "amountFieldByConstraint": {
+            "excludeShippingAndHandling": "item_subtotal",
+            "includeShippingAndHandling": "grand_total"
+          },
+          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
+        }
+      },
+      "machineEvidenceSeed": {
+        "path": "/Users/rebekah/handbook_web/experiments/independent-exploration/round-53/contract-root/webarena-shopping/references/execution-contract.json",
+        "sha256": "e36a224946fb5907d81d6952177148359148b8d4f052d7cf331c21fca2320ee0",
+        "generatedAt": "2026-08-20T01:30:24.625Z"
+      }
+    },
+    "checkout": {
+      "workflow": "checkout",
+      "title": "购买与结账",
+      "siteKeys": [
+        "shopping"
+      ],
+      "origin": "http://localhost:7770",
+      "skillFile": "runtime-skills/checkout/SKILL.md",
+      "intentPattern": "buy|purchase .*product|checkout|place .*order|payment|shipping address",
+      "contextModel": {
+        "capabilityIds": [
+          "submit-purchase"
+        ],
+        "surfaceIds": [
+          "storefront-cart-checkout"
+        ],
+        "actionIds": [
+          "checkout-prepare",
+          "checkout-submit-order"
+        ],
+        "evidenceIds": [
+          "checkout-payment-ready",
+          "checkout-order-confirmed"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "checkout",
+          "intentPattern": "buy|purchase .*product|checkout|place .*order|payment|shipping address",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "checkout",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "checkout",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
+        }
+      }
+    },
+    "cart-lists": {
+      "workflow": "cart-lists",
+      "title": "购物车、愿望单与比较",
+      "siteKeys": [
+        "shopping"
+      ],
+      "origin": "http://localhost:7770",
+      "skillFile": "runtime-skills/cart-lists/SKILL.md",
+      "intentPattern": "cart|wishlist|wish list|compare|add .*item|remove .*item|quantity",
+      "contextModel": {
+        "capabilityIds": [
+          "manage-cart"
+        ],
+        "surfaceIds": [
+          "storefront-cart-checkout"
+        ],
+        "actionIds": [
+          "cart-add-product"
+        ],
+        "evidenceIds": [
+          "cart-add-and-nonempty"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "empty-cart-state",
+            "status": "not_evidenced",
+            "impact": "Cart capability is limited to the evidenced nonempty state."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "cart-lists",
+          "intentPattern": "cart|wishlist|wish list|compare|add .*item|remove .*item|quantity",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "cart-lists",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "cart-lists",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
         }
       }
     },
@@ -567,9 +1257,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/reviews/SKILL.md",
       "intentPattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -611,13 +1325,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -686,6 +1441,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -705,9 +1475,43 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/account-forms/SKILL.md",
       "intentPattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
+      "contextModel": {
+        "capabilityIds": [
+          "establish-account"
+        ],
+        "surfaceIds": [
+          "storefront-account"
+        ],
+        "actionIds": [
+          "account-create",
+          "account-access"
+        ],
+        "evidenceIds": [
+          "account-registration-authenticated",
+          "account-existing-session"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -838,6 +1642,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -857,89 +1676,61 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/category-navigation/SKILL.md",
       "intentPattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
+      "contextModel": {
+        "capabilityIds": [
+          "browse-catalog"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-browse-category",
+          "catalog-advance-results"
+        ],
+        "evidenceIds": [
+          "catalog-home-category-pagination"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
       "allowedActions": [
-        "read_current_list_page_v1",
         "verify_final_state_v1"
       ],
-      "forbiddenActions": [
-        {
-          "kind": "browser.evaluate",
-          "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
-        },
-        {
-          "kind": "incremental-card-observation",
-          "when": "product-list selectors are available",
-          "reason": "List pages must be read atomically to prevent drift and repeated observation."
-        }
-      ],
+      "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
         "maxConsecutiveSameAction": 2,
         "recoveryAttemptsMax": 2,
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
-        "listReadMaxCallsPerPageId": 1,
-        "customListEvaluateMaxCalls": 0,
+        "listReadMaxCallsPerPageId": null,
+        "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
       },
-      "actions": [
-        {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
-          "deterministic": true,
-          "scope": "current-list-page",
-          "maxCallsPerPageId": 1,
-          "selectors": {
-            "item": "li.product-item",
-            "fields": {
-              "name": "a.product-item-link",
-              "price": ".price-box .price",
-              "link": "a.product-item-link"
-            },
-            "pagination": {
-              "next": ".pages .pages-item-next > a.action.next",
-              "limiter": "select[data-role='limiter']",
-              "total": ".toolbar-amount"
-            }
-          },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
-          "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
-            "requiredKeys": [
-              "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
-              "complete",
-              "currentLimiterValue",
-              "limiterOptions",
-              "errors"
-            ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
-            "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
-            ]
-          }
-        }
-      ],
+      "actions": [],
       "finalStateGate": {
         "actionId": "verify_final_state_v1",
         "kind": "cdp.readCurrentPageState",
@@ -962,13 +1753,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -1062,7 +1894,6 @@
           "visualAnchors": []
         },
         "allowedActions": [
-          "read_current_list_page_v1",
           "verify_final_state_v1"
         ],
         "requiredNetworkEvents": [],
@@ -1092,6 +1923,21 @@
             "desiredState": "category_open"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -1111,12 +1957,46 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/catalog-aggregation/SKILL.md",
       "intentPattern": "price range|full names|available models|products from",
+      "contextModel": {
+        "capabilityIds": [
+          "browse-catalog"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-browse-category",
+          "catalog-advance-results"
+        ],
+        "evidenceIds": [
+          "catalog-home-category-pagination"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
       "allowedActions": [
         "read_current_list_page_v1",
+        "submit_answer_evidence_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
@@ -1140,9 +2020,55 @@
         "listReadMaxCallsPerPageId": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
-        "supplementalQueryAllowedOnlyWhen": "zero accepted candidates satisfy target product type in the frozen primary result set",
+        "supplementalQueryAllowedOnlyWhen": "the task requires a complete aggregate or extrema and the primary storefront-search result cannot prove semantic recall closure; the supplemental query must replace only the product-type term with one direct lexical synonym while preserving brand and all hard constraints",
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": 0
+      },
+      "queryPlan": {
+        "strategyByOutput": {
+          "extremaOnly": {
+            "strategy": "category-boundary-proof",
+            "requiredOutputs": [
+              "min",
+              "max"
+            ],
+            "directions": [
+              "asc",
+              "desc"
+            ],
+            "accept": "first candidate in sorted order satisfying product type, brand, and all hard constraints",
+            "stop": "both boundaries have accepted candidates with page and sort provenance"
+          },
+          "completeCollection": {
+            "strategy": "brand-search-category-facet",
+            "searchPath": "/catalogsearch/result/",
+            "queryParameter": "q",
+            "queryValue": "the exact requested brand only",
+            "requiredFacet": "the narrowest category matching the requested product type",
+            "supplementalQueriesMax": 1,
+            "stop": "the category-filtered result fits in the maximum observed page size and every ambiguous candidate has exact constraint evidence",
+            "exactFacetMissingFallback": "run one direct brand plus primary product-type query; do not enumerate navigation menus; stop if the result cannot fit in the maximum observed page size"
+          }
+        },
+        "actionBudget": {
+          "menuEnumerationMax": 0,
+          "categoryFacetSelectionsMax": 3,
+          "directTypeFallbackQueriesMax": 1,
+          "repeatedCanonicalUrlMax": 1
+        },
+        "pageSizeParameter": "product_list_limit",
+        "pageSizePolicy": "put the largest observed limiter option in the canonical URL before the first contract read",
+        "sortParameters": {
+          "field": "product_list_order=price",
+          "direction": "product_list_dir=asc|desc"
+        },
+        "forbidQuotedPhraseRewrite": true,
+        "forbiddenDetours": [
+          "navigation-menu enumeration",
+          "reading or paginating the unfiltered brand-search collection",
+          "multiword ordinary search whose OR semantics expands the collection",
+          "product details unless a list title lacks an exact hard-constraint term"
+        ]
       },
       "actions": [
         {
@@ -1192,6 +2118,24 @@
               "each item has name, url, and numeric price"
             ]
           }
+        },
+        {
+          "actionId": "submit_answer_evidence_v1",
+          "kind": "evidence.submit",
+          "deterministic": true,
+          "scope": "current-run-answer",
+          "maxCallsPerPageId": 1,
+          "requiredInput": {
+            "requiredKeys": [
+              "evidenceStatus",
+              "result",
+              "evidenceRecordIds",
+              "filters",
+              "ledger"
+            ],
+            "evidenceStatus": "verified",
+            "evidenceRecordIdsMinItems": 1
+          }
         }
       ],
       "finalStateGate": {
@@ -1216,13 +2160,55 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "submitActionId": "submit_answer_evidence_v1",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -1257,6 +2243,12 @@
         },
         "page": {
           "routeHints": [
+            {
+              "path": "/electronics/headphones/earbud-headphones.html",
+              "label": "electronics > headphones > earbud headphones",
+              "terms": {},
+              "leafTerms": {}
+            },
             {
               "path": "/beauty-personal-care/oral-care/teeth-whitening.html",
               "label": "beauty personal care > oral care > teeth whitening",
@@ -1311,6 +2303,7 @@
         },
         "allowedActions": [
           "read_current_list_page_v1",
+          "submit_answer_evidence_v1",
           "verify_final_state_v1"
         ],
         "requiredNetworkEvents": [],
@@ -1340,6 +2333,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -1359,9 +2367,41 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/product-selection/SKILL.md",
       "intentPattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
+      "contextModel": {
+        "capabilityIds": [
+          "inspect-product"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-inspect-product"
+        ],
+        "evidenceIds": [
+          "catalog-product-detail-review-surface"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "read_current_list_page_v1",
@@ -1464,13 +2504,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -1576,6 +2657,21 @@
             "desiredState": "product_detail_open"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -1595,9 +2691,47 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/search-discovery/SKILL.md",
       "intentPattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
+      "contextModel": {
+        "capabilityIds": [
+          "search-products"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-search-products"
+        ],
+        "evidenceIds": [
+          "catalog-search-results"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "empty-search-state",
+            "status": "not_evidenced",
+            "impact": "No reusable empty-result behavior is asserted."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "read_current_list_page_v1",
@@ -1700,13 +2834,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -1793,6 +2968,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -1812,9 +3002,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/read-content/SKILL.md",
       "intentPattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -1856,13 +3070,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -1931,6 +3186,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -1950,9 +3220,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/edit-submit/SKILL.md",
       "intentPattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -2083,6 +3377,21 @@
             "desiredState": "task-success"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -2102,9 +3411,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/navigation/SKILL.md",
       "intentPattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -2146,13 +3479,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -2228,6 +3602,21 @@
             "desiredState": "page_open"
           }
         },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
         "successContract": {
           "requiredStatus": "SUCCESS",
           "lifecycleGate": "verify_final_state_v1",
@@ -2247,9 +3636,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/other/SKILL.md",
       "intentPattern": ".*",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -2291,13 +3704,54 @@
         "requiredBefore": "SUCCESS",
         "mode": "verifyAnswerEvidence",
         "enforcement": "observe",
+        "responseField": "evidence_ledger",
         "requiredFields": [
-          "answer",
+          "evidenceStatus",
+          "result",
           "evidenceRecordIds",
           "filters",
-          "amountField",
           "ledger"
         ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
         "failureAction": "reject_success_or_fallback"
       },
       "ir": {
@@ -2364,6 +3818,21 @@
             "entity": "other",
             "identity": "task-target",
             "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
           }
         },
         "successContract": {

@@ -6,6 +6,25 @@
     "identity": "task-target",
     "desiredState": "task-success"
   },
+  "contextModel": {
+    "capabilityIds": [
+      "establish-account"
+    ],
+    "surfaceIds": [
+      "storefront-account"
+    ],
+    "actionIds": [
+      "account-create",
+      "account-access"
+    ],
+    "evidenceIds": [
+      "account-registration-authenticated",
+      "account-existing-session"
+    ],
+    "supportStatus": "supported",
+    "limitations": [],
+    "fallbackOnUnsupported": true
+  },
   "allowedActions": [
     "verify_final_state_v1"
   ],
@@ -16,5 +35,20 @@
   "answerEvidenceGate": {
     "requiredBefore": "SUCCESS",
     "mode": "not_applicable"
+  },
+  "responseContract": {
+    "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+    "onNotFound": {
+      "status": "NOT_FOUND_ERROR",
+      "retrievedData": null,
+      "forbiddenRetrievedData": [
+        "empty_array",
+        "zero_array"
+      ]
+    },
+    "onSuccess": {
+      "status": "SUCCESS",
+      "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+    }
   }
 }

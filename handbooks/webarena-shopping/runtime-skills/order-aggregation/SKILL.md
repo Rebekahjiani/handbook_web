@@ -9,6 +9,7 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
 - 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
 - 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
+- 最终响应服从任务给出的 expected status：若为 `NOT_FOUND_ERROR`，`retrieved_data` 必须是 JSON `null`，不能返回 `[]`、`[0]` 或 `[0.0]`。
 
 # 订单筛选、金额聚合与退款
 
@@ -29,6 +30,13 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - `accepted_records`：满足时间与状态条件的订单台账
 - `next_href`：唯一待访问的下一页；无下一页时为 `null`
 
+## 答案证据提交
+
+- 最终回答前必须调用一次 `localweb_contract_action`：`action_id=submit_answer_evidence_v1`、`workflow=order-aggregation`、`route=shopping`、`contract_path=webarena-shopping/references/execution-contract.json`、`page_id=当前 URL`，并通过 `evidence_ledger` 参数提交台账。
+- `evidence_ledger.evidenceStatus` 仅在所有查询/分页或排序边界证明完成、候选验收完成且结果可由同一台账重算时写 `verified`；同时包含 `result`、非空 `evidenceRecordIds`、实际 `filters` 和含页面来源的 `ledger`。否则不得调用提交动作或声明 SUCCESS。
+- 参数形状固定为 `evidence_ledger={"evidenceStatus":"verified","result":<与最终答案相同的值或对象>,"evidenceRecordIds":["记录ID"],"filters":{"字段":"实际条件"},"ledger":{"records":[{"recordId":"记录ID","pageId":"来源URL","value":"证据值"}]}}`；`filters` 和 `ledger` 必须是对象，不能写成字符串或数组。
+- 提交动作返回 `evidenceLedger` 后，最终 JSON 只保留 benchmark 要求的字段；不要把审计台账塞进 `retrieved_data` 或增加任务未要求的答案字段。
+
 ## 循环动作
 
 1. 先做时间表达式预检：若任务只写 `past months` 但没有数量或上下界，停止执行浏览流程，按任务 schema 直接返回零值对象，不要打开订单历史。
@@ -39,7 +47,7 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 
 ## 停止条件与必检项
 
-- “spent”默认排除 Canceled；退款任务只处理 Canceled，除非任务明确另有状态口径。
+- “spent”默认先排除 Canceled 和 Refunded，再做月份分组或金额求和；退款任务只处理 Canceled/Refunded，除非任务明确另有状态口径。
 - 包含运费时使用 Grand Total；排除运费或按商品类别统计时使用商品小计，不要用 Grand Total。
 - 包含 shipping/handling 时，逐订单同时记录商品小计、shipping、handling、Grand Total 和状态；Grand Total 缺失或未核对时不得用小计代替总额。
 - 金额聚合前逐行复核时间窗口、complete 状态和金额字段；订单数量正确但金额字段缺失仍视为未完成。
@@ -48,17 +56,14 @@ description: webarena-shopping 的订单筛选、金额聚合与退款工作流�
 - 若任务只写 `past months` 但没有数量或上下界，不得扩成全部历史；把时间范围标记为不完整，返回零值对象或阻塞证据，不能猜测 SUCCESS。
 - 进入详情后核对页面订单号；商品类别优先以站点分类和商品用途判断：主用途属于目标类别才计入，名称近似但用途不同的配件不计入。
 - 品类口径（本数据集校准判例）：食品(food/cooking)包含烘焙食品如玉米松饼杂粮粉（corn muffin mix）、即食餐（MRE/beef cholent）、食品饮料（chai、orange juice），以及直接用于食品的装饰如蛋糕装饰配件（cake topper 彩虹生日派对用品）——cake topper 计入 food 类；hair care/style 只包含护理和染发造型产品（conditioner、haircolor/dye），不包含身体护理（body butter、body lotion）和纯装饰配件（发箍 headbands、珠饰发夹）——body butter 与 hairbands 不计入 hair care。
-- 按类别统计时不使用 Canceled 订单中的商品（“spent”语义排除已取消订单），只统计任务要求状态（默认 Complete）的订单；类目金额用于类目内商品小计，包含运费时再加 Grand Total 与 subtotal 之差。
+- 按类别或月份统计时不使用 Canceled/Refunded 订单中的商品（“spent”语义排除未实际支出的订单），先按状态过滤，再分组求和；类目金额用于类目内商品小计，包含运费时再加 Grand Total 与 subtotal 之差。
 - 不能因当前页没有分页控件就断言只有一页；同时核对总记录文本、已访问行数和页面身份。
 - 无匹配记录时严格遵守任务要求的返回类型：对象任务返回对象的零值字段，列表任务才返回空列表，明确 null 协议才返回 null。
 - 成功判据未被页面证据证明时继续；`next_action` 为空或动作开始重复时停止并进入失败恢复。
 
-## 已验证结构
+## 操作锚点
 
-- `history-row`：`table#my-orders-table.history > tbody > tr`（history-table）
-- `history-purchase-date`：`:scope > td[data-th="Date"]`（history-row）
-- `history-grand-total`：`:scope > td[data-th="Order Total"] .price`（history-row）
-- `history-status`：`:scope > td[data-th="Status"]`（history-row）
+- View All：`locator("a.action[href=\"${SITE_ORIGIN}/customer/account/#my-orders-table\"]")`（confidence=0.65，evidence=unique,scoped）
 
 ## 最终状态闸门
 

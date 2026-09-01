@@ -39,6 +39,13 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "order-aggregation",
       "reason": "订单筛选、金额聚合与退款",
+      "capability_ids": [
+        "aggregate-orders"
+      ],
+      "evidence_ids": [
+        "orders-multiple-history-detail"
+      ],
+      "context_support": "supported",
       "capability_signature": {
         "entity": "order",
         "operations": [
@@ -95,6 +102,11 @@
             "value": "canceled"
           },
           {
+            "field": "status",
+            "operator": "neq",
+            "value": "refunded"
+          },
+          {
             "field": "purchase_date",
             "operator": "eq"
           },
@@ -133,7 +145,19 @@
             "type": "number"
           },
           {
+            "field": "count",
+            "type": "number"
+          },
+          {
             "field": "amount",
+            "type": "number"
+          },
+          {
+            "field": "month",
+            "type": "string"
+          },
+          {
+            "field": "total",
             "type": "number"
           }
         ],
@@ -159,6 +183,15 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "order-lookup",
       "reason": "订单查找与已购商品属性",
+      "capability_ids": [
+        "inspect-orders"
+      ],
+      "evidence_ids": [
+        "orders-empty-history",
+        "orders-single-history-detail",
+        "orders-multiple-history-detail"
+      ],
+      "context_support": "supported",
       "capability_signature": {
         "entity": "order",
         "operations": [
@@ -256,8 +289,95 @@
         "shopping"
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
-      "route": "reviews",
+      "route": "checkout",
       "priority": 2,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "buy|purchase .*product|checkout|place .*order|payment|shipping address",
+      "skill_file": "runtime-skills/checkout/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/checkout.json",
+      "runtime_mode": "workflow_skill",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "checkout",
+      "reason": "购买与结账",
+      "capability_ids": [
+        "submit-purchase"
+      ],
+      "evidence_ids": [
+        "checkout-payment-ready",
+        "checkout-order-confirmed"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "checkout",
+        "operations": [
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "site_keys": [
+        "shopping"
+      ],
+      "origin_pattern": "^http://localhost:7770(?:/|$)",
+      "route": "cart-lists",
+      "priority": 3,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "cart|wishlist|wish list|compare|add .*item|remove .*item|quantity",
+      "skill_file": "runtime-skills/cart-lists/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/cart-lists.json",
+      "runtime_mode": "workflow_skill",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "cart-lists",
+      "reason": "购物车、愿望单与比较",
+      "capability_ids": [
+        "manage-cart"
+      ],
+      "evidence_ids": [
+        "cart-add-and-nonempty"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "cart",
+        "operations": [
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "quantity",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "site_keys": [
+        "shopping"
+      ],
+      "origin_pattern": "^http://localhost:7770(?:/|$)",
+      "route": "reviews",
+      "priority": 4,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
@@ -267,6 +387,9 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "reviews",
       "reason": "商品详情与评论",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
       "capability_signature": null
     },
     {
@@ -275,7 +398,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "account-forms",
-      "priority": 3,
+      "priority": 5,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
@@ -285,7 +408,31 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "account-forms",
       "reason": "账户、地址与表单",
-      "capability_signature": null
+      "capability_ids": [
+        "establish-account"
+      ],
+      "evidence_ids": [
+        "account-registration-authenticated",
+        "account-existing-session"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "account",
+        "operations": [
+          "lookup",
+          "read",
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "account_status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -293,7 +440,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "category-navigation",
-      "priority": 4,
+      "priority": 6,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
@@ -303,7 +450,34 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "category-navigation",
       "reason": "分类页导航与价格过滤",
-      "capability_signature": null
+      "capability_ids": [
+        "browse-catalog"
+      ],
+      "evidence_ids": [
+        "catalog-home-category-pagination"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "catalog",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "category_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -311,7 +485,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "catalog-aggregation",
-      "priority": 5,
+      "priority": 7,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "price range|full names|available models|products from",
@@ -321,7 +495,49 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "catalog-aggregation",
       "reason": "商品集合、名称与价格聚合",
-      "capability_signature": null
+      "capability_ids": [
+        "browse-catalog"
+      ],
+      "evidence_ids": [
+        "catalog-home-category-pagination"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "product",
+        "operations": [
+          "aggregate",
+          "lookup"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "names",
+            "type": "array"
+          },
+          {
+            "field": "min_price",
+            "type": "number"
+          },
+          {
+            "field": "max_price",
+            "type": "number"
+          },
+          {
+            "field": "min",
+            "type": "number"
+          },
+          {
+            "field": "max",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -329,7 +545,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "product-selection",
-      "priority": 6,
+      "priority": 8,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
@@ -339,7 +555,46 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "product-selection",
       "reason": "满足约束的最优商品选择",
-      "capability_signature": null
+      "capability_ids": [
+        "inspect-product"
+      ],
+      "evidence_ids": [
+        "catalog-product-detail-review-surface"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "product",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "price",
+            "operator": "min"
+          },
+          {
+            "field": "price",
+            "operator": "max"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "price",
+            "type": "number"
+          },
+          {
+            "field": "product_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -347,7 +602,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "search-discovery",
-      "priority": 7,
+      "priority": 9,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
@@ -357,7 +612,33 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "search-discovery",
       "reason": "通用搜索、筛选与商品发现",
-      "capability_signature": null
+      "capability_ids": [
+        "search-products"
+      ],
+      "evidence_ids": [
+        "catalog-search-results"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "product",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "product_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -365,7 +646,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "read-content",
-      "priority": 8,
+      "priority": 10,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
@@ -375,6 +656,9 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "read-content",
       "reason": "读取列表、详情与结构化数据",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
       "capability_signature": null
     },
     {
@@ -383,7 +667,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "edit-submit",
-      "priority": 9,
+      "priority": 11,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
@@ -393,6 +677,9 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "edit-submit",
       "reason": "创建、修改与提交",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
       "capability_signature": null
     },
     {
@@ -401,7 +688,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "navigation",
-      "priority": 10,
+      "priority": 12,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
@@ -411,6 +698,9 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "navigation",
       "reason": "页面导航",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
       "capability_signature": null
     },
     {
@@ -419,7 +709,7 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "other",
-      "priority": 11,
+      "priority": 13,
       "backoff": false,
       "fallback": true,
       "intent_pattern": ".*",
@@ -429,6 +719,9 @@
       "contract_file": "references/execution-contract.json",
       "contract_workflow": "other",
       "reason": "未归类任务",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
       "capability_signature": null
     }
   ],
@@ -437,6 +730,12 @@
       "route": "order-aggregation",
       "priority": 100,
       "fallback": false,
+      "capability_ids": [
+        "aggregate-orders"
+      ],
+      "evidence_ids": [
+        "orders-multiple-history-detail"
+      ],
       "signature": {
         "entity": "order",
         "operations": [
@@ -493,6 +792,11 @@
             "value": "canceled"
           },
           {
+            "field": "status",
+            "operator": "neq",
+            "value": "refunded"
+          },
+          {
             "field": "purchase_date",
             "operator": "eq"
           },
@@ -531,7 +835,19 @@
             "type": "number"
           },
           {
+            "field": "count",
+            "type": "number"
+          },
+          {
             "field": "amount",
+            "type": "number"
+          },
+          {
+            "field": "month",
+            "type": "string"
+          },
+          {
+            "field": "total",
             "type": "number"
           }
         ],
@@ -545,6 +861,14 @@
       "route": "order-lookup",
       "priority": 99,
       "fallback": false,
+      "capability_ids": [
+        "inspect-orders"
+      ],
+      "evidence_ids": [
+        "orders-empty-history",
+        "orders-single-history-detail",
+        "orders-multiple-history-detail"
+      ],
       "signature": {
         "entity": "order",
         "operations": [
@@ -635,6 +959,250 @@
           "detail_url"
         ],
         "requiresDetail": true
+      }
+    },
+    {
+      "route": "checkout",
+      "priority": 98,
+      "fallback": false,
+      "capability_ids": [
+        "submit-purchase"
+      ],
+      "evidence_ids": [
+        "checkout-payment-ready",
+        "checkout-order-confirmed"
+      ],
+      "signature": {
+        "entity": "checkout",
+        "operations": [
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "route": "cart-lists",
+      "priority": 97,
+      "fallback": false,
+      "capability_ids": [
+        "manage-cart"
+      ],
+      "evidence_ids": [
+        "cart-add-and-nonempty"
+      ],
+      "signature": {
+        "entity": "cart",
+        "operations": [
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "quantity",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "route": "account-forms",
+      "priority": 96,
+      "fallback": false,
+      "capability_ids": [
+        "establish-account"
+      ],
+      "evidence_ids": [
+        "account-registration-authenticated",
+        "account-existing-session"
+      ],
+      "signature": {
+        "entity": "account",
+        "operations": [
+          "lookup",
+          "read",
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "account_status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "route": "category-navigation",
+      "priority": 95,
+      "fallback": false,
+      "capability_ids": [
+        "browse-catalog"
+      ],
+      "evidence_ids": [
+        "catalog-home-category-pagination"
+      ],
+      "signature": {
+        "entity": "catalog",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "category_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "route": "catalog-aggregation",
+      "priority": 94,
+      "fallback": false,
+      "capability_ids": [
+        "browse-catalog"
+      ],
+      "evidence_ids": [
+        "catalog-home-category-pagination"
+      ],
+      "signature": {
+        "entity": "product",
+        "operations": [
+          "aggregate",
+          "lookup"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "names",
+            "type": "array"
+          },
+          {
+            "field": "min_price",
+            "type": "number"
+          },
+          {
+            "field": "max_price",
+            "type": "number"
+          },
+          {
+            "field": "min",
+            "type": "number"
+          },
+          {
+            "field": "max",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "route": "product-selection",
+      "priority": 93,
+      "fallback": false,
+      "capability_ids": [
+        "inspect-product"
+      ],
+      "evidence_ids": [
+        "catalog-product-detail-review-surface"
+      ],
+      "signature": {
+        "entity": "product",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "price",
+            "operator": "min"
+          },
+          {
+            "field": "price",
+            "operator": "max"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "price",
+            "type": "number"
+          },
+          {
+            "field": "product_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "route": "search-discovery",
+      "priority": 92,
+      "fallback": false,
+      "capability_ids": [
+        "search-products"
+      ],
+      "evidence_ids": [
+        "catalog-search-results"
+      ],
+      "signature": {
+        "entity": "product",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "product_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
       }
     }
   ],

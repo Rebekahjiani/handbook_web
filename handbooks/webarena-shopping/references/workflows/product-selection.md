@@ -2,7 +2,7 @@
 
 适用线索：最便宜、最佳选项、最低容量、打开商品页
 
-证据状态：只有入口或邻近控件证据，关键步骤仍有缺口
+证据状态：已找到关键步骤的页面与 locator 证据
 
 ## 推荐流程
 
@@ -28,10 +28,11 @@
 
 ## 站点模型约束
 
-- 业务对象 `category`：字段 `name、hierarchy`。
-- 业务对象 `product`：字段 `name、price、stock_state、product_identifier`。
-- 业务能力 `extract-product-field`：输入 `selected_product_detail_context、requested_field`；输出 `field_value`；依赖上下文 `selected-category-scope、selected-product-detail-context`。
-- 业务能力 `select-product-from-category`：输入 `requested_category、product_criteria`；输出 `selected_product`；依赖上下文 `selected-category-scope`。
+- 业务对象 `product`：字段 ``。
+- 业务对象 `product-collection`：字段 ``。
+- 业务能力 `inspect-product`：输入 `A product selected from a product collection.`；输出 `Observed product identity, price, descriptive attributes, and review-related state.`；依赖上下文 `catalog-exploration`。
+- 页面状态 `storefront-catalog`：URL `undefined`；必须同时观察字段 `无`。
+- 动作 `catalog-inspect-product`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
 
 ## 成功判据
 

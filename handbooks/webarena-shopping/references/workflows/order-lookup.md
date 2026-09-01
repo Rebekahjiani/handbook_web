@@ -23,13 +23,12 @@
 
 ## 站点模型约束
 
-- 业务对象 `order`：字段 `order_number、purchase_date、status、grand_total`。
-- 业务能力 `extract-order-field`：输入 `selected_order_detail_context、requested_field`；输出 `field_value`；依赖上下文 `current-account-order-scope、selected-order-detail-context`。
-- 业务能力 `find-latest-order-matching-status`：输入 `requested_status`；输出 `selected_order、no_matching_order`；依赖上下文 `current-account-order-scope、latest-order-selection-rule`。
-- 页面状态 `storefront-order-history`：URL `^https?://(?:localhost|127\.0\.0\.1):7770/sales/order/history/(?:\?.*)?$`；必须同时观察字段 `order_number、purchase_date、grand_total、status、detail_link`。
-- 页面状态 `storefront-order-detail`：URL `^https?://(?:localhost|127\.0\.0\.1):7770/sales/order/view/order_id/[0-9]+/(?:\?.*)?$`；必须同时观察字段 `order_number、purchase_date、grand_total`。
-- 动作 `advance-order-history-page`：从当前快照重新解析 `pagination-next`，操作后重新验证页面状态与对象身份。
-- 动作 `open-selected-order-detail`：从当前快照重新解析 `history-detail-link`，操作后重新验证页面状态与对象身份。
+- 业务对象 `order`：字段 ``。
+- 业务对象 `order-collection`：字段 ``。
+- 业务能力 `inspect-orders`：输入 `An authenticated customer account and order selection criteria.`；输出 `Observed order records and details that satisfy the requested criteria.`；依赖上下文 `authenticated-shopping、order-analysis`。
+- 页面状态 `storefront-orders`：URL `undefined`；必须同时观察字段 `无`。
+- 动作 `orders-inspect-history`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
+- 动作 `orders-inspect-detail`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
 
 ## 成功判据
 
@@ -43,17 +42,6 @@
 ## 操作锚点
 
 - View All：`locator("a.action[href=\"${SITE_ORIGIN}/customer/account/#my-orders-table\"]")`；证据：`02-office-products-office-furniture-lighting-cabinets-racks-shelves-html.json`
-
-## 模型定位证据
-
-- 下列 selector 用于缩小实时快照范围或核验结构；点击时仍使用当前快照返回的元素引用。
-- `history-row`：`table#my-orders-table.history > tbody > tr`；作用域 `history-table`；verified
-- `history-purchase-date`：`:scope > td[data-th="Date"]`；作用域 `history-row`；verified
-- `history-grand-total`：`:scope > td[data-th="Order Total"] .price`；作用域 `history-row`；verified
-- `history-status`：`:scope > td[data-th="Status"]`；作用域 `history-row`；verified
-- `history-detail-link`：`:scope > td[data-th="Actions"] > a.action.view`；作用域 `history-row`；verified
-- `pagination-next`：`.pages .pages-item-next > a.action.next`；作用域 `document`；verified
-- `detail-grand-total`：`tr.grand_total > td.amount[data-th="Grand Total"] .price`；作用域 `detail-totals`；verified
 
 ## 风险与恢复
 
