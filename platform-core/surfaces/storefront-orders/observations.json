@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-orders",
+  "observations": [
+    {"id": "orders-history-empty", "condition": "The account has no order rows.", "evidence_ids": ["orders-empty-history"]},
+    {"id": "orders-history-populated", "condition": "The account has one or more order rows.", "evidence_ids": ["orders-single-history-detail", "orders-multiple-history-detail"]},
+    {"id": "orders-detail-visible", "condition": "One selected order exposes its detail state.", "evidence_ids": ["orders-single-history-detail", "orders-multiple-history-detail"]}
+  ]
+}

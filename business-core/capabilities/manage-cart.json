@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "manage-cart",
+  "object_ids": ["product", "shopping-cart"],
+  "inputs": ["A confirmed product and a task-authorized purchase intent."],
+  "outputs": ["A shopping cart containing the intended product."],
+  "business_conditions": ["The selected product must match the requested identity and attributes.", "An empty-cart recovery policy remains unsupported until independently evidenced."],
+  "requires_context_ids": ["authenticated-shopping", "purchase-preparation"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["cart-add-and-nonempty"]}]
+}

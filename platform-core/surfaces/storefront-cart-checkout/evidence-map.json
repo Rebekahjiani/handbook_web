@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-cart-checkout",
+  "evidence": [
+    {"id": "cart-add-and-nonempty", "reviewed_source_path": "platform-core/reviewed/storefront-cart-checkout.evidence.jsonl", "reviewed_source_sha256": "be9416c23bf42dbcf283e42f4fc85a3040b8fa2856477955d3731844517bb46f", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "checkout-payment-ready", "reviewed_source_path": "platform-core/reviewed/storefront-cart-checkout.evidence.jsonl", "reviewed_source_sha256": "be9416c23bf42dbcf283e42f4fc85a3040b8fa2856477955d3731844517bb46f", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "checkout-order-confirmed", "reviewed_source_path": "platform-core/reviewed/storefront-cart-checkout.evidence.jsonl", "reviewed_source_sha256": "be9416c23bf42dbcf283e42f4fc85a3040b8fa2856477955d3731844517bb46f", "reviewed_at": "2026-08-28T05:33:19Z"}
+  ]
+}

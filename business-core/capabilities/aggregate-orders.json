@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "aggregate-orders",
+  "object_ids": ["order-collection", "order"],
+  "inputs": ["Order filtering criteria and requested aggregate fields."],
+  "outputs": ["An aggregate derived from the fully inspected supported order collection."],
+  "business_conditions": ["Each included order must satisfy the requested status and time criteria.", "Monetary field selection must follow the requested business meaning.", "Large multi-segment histories are only partially supported by dedicated evidence."],
+  "requires_context_ids": ["order-analysis"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["orders-multiple-history-detail"]}]
+}

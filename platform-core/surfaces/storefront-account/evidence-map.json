@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-account",
+  "evidence": [
+    {"id": "account-registration-authenticated", "reviewed_source_path": "platform-core/reviewed/storefront-account.evidence.jsonl", "reviewed_source_sha256": "294b43a37932440c1a6ed5df8e4aa290f59d775159546e154d733614fbd56c7d", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "account-existing-session", "reviewed_source_path": "platform-core/reviewed/storefront-account.evidence.jsonl", "reviewed_source_sha256": "294b43a37932440c1a6ed5df8e4aa290f59d775159546e154d733614fbd56c7d", "reviewed_at": "2026-08-28T05:33:19Z"}
+  ]
+}

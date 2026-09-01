@@ -1,0 +1,134 @@
+{
+  "schema_version": "1",
+  "created_at": "2026-08-28T05:40:14.158789+00:00",
+  "artifacts": [
+    {
+      "path": "platform-core/surfaces.json",
+      "sha256": "82f39802f7c3ec99d516eb2528cb61d540d8ab5f76cf3cb685983273c8740e69"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-account/actions.json",
+      "sha256": "212c355fd5bccb0245dc43e34d5b585cd3a0f55687b34d04cac7c82aa6a27c70"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-account/evidence-map.json",
+      "sha256": "99c463ce40336327a741c39ff4836d21477205146875ccc06b653ced756ea04b"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-account/observations.json",
+      "sha256": "53b9a876c27d8456d8fd1843c2933e2994a2c41178aeb13cede5464d2abe224e"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-account/state-machine.json",
+      "sha256": "7a7144a2bef9d5042af705f63236181425f5bb8938c2fda3e3d77f33873ba1f1"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-cart-checkout/actions.json",
+      "sha256": "256aeb98cebb93c54d2e5086157b77bafbf2c2a0d7728e294889fe83e636b61c"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-cart-checkout/evidence-map.json",
+      "sha256": "75eb3879be58bbb2874a6b785409fb1be47ccbf1223828550be8553cd7eb6c6f"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-cart-checkout/observations.json",
+      "sha256": "c2faf29975c3c9edd895407afc6c095e0d7c66ac6db49250b6eed5d3d0ea8b96"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-cart-checkout/state-machine.json",
+      "sha256": "6b1c67d06f18c2727fe715e91c28bba85516d7c4cf7c2947c660250034e5bcf7"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-catalog/actions.json",
+      "sha256": "9b5bf492df91ece98574069ccedb4e6d7893e466a498378aeb516c8b24913373"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-catalog/evidence-map.json",
+      "sha256": "3d51ba049ddf28ead525c3fe3701e59636e93d090dda705ae9c973345b340a66"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-catalog/observations.json",
+      "sha256": "d248777c9db0d1e02c24b4431f23883fa9dab875fe3218720f956d300402cf1d"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-catalog/state-machine.json",
+      "sha256": "9d3e3d277aa9732c610890cad670858628e4d0b4cb51248f071ebe4338f9d28e"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-orders/actions.json",
+      "sha256": "7e8b844c9b51dff62898b5a1540cd0f0cd962e09c95347da3e0338a3c1139fd3"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-orders/evidence-map.json",
+      "sha256": "3e011ac256cd64dadbb1824e93652e2868bba67b4ef2f12771b402e1c1ad0780"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-orders/observations.json",
+      "sha256": "29654a97a0cb0062962eef3fc8cdf1d0e0814f90702d1e430c7d1247d83dd1c3"
+    },
+    {
+      "path": "platform-core/surfaces/storefront-orders/state-machine.json",
+      "sha256": "fe11107d4a288d7444def27f8c4d70e1ac417006764bc849b65772dbb5dd609d"
+    },
+    {
+      "path": "business-core/object-model.json",
+      "sha256": "cc596ee49049c966280e73af6574af2f0b65a56c85f4a6670dcd283d91b5d043"
+    },
+    {
+      "path": "business-core/business-context.json",
+      "sha256": "844c439dc3327002506d2b35718c87f60a96289988ca586f816ee25abd9160bd"
+    },
+    {
+      "path": "business-core/capabilities/aggregate-orders.json",
+      "sha256": "8a9b7f90c44170023e031331ceebabe6bde646e007ff80641fd8b05120247fc8"
+    },
+    {
+      "path": "business-core/capabilities/browse-catalog.json",
+      "sha256": "1f2a5975d91873218b3da8754b183dd1d814d7e3c3ac3ed2969d220efb289af2"
+    },
+    {
+      "path": "business-core/capabilities/establish-account.json",
+      "sha256": "2d1e4acc64f79a9593c0edd6d3499d93753f832f842b367d1101be0dbe2d85ed"
+    },
+    {
+      "path": "business-core/capabilities/inspect-orders.json",
+      "sha256": "4ba6f2788ba2fc6a04ec7eb21117d1d451396886bdd7ac09e14a8f22ff53850e"
+    },
+    {
+      "path": "business-core/capabilities/inspect-product.json",
+      "sha256": "752123ca64652e032d9de96f96f7ac618db2c969bfb7e4c8beebcfe3a661435c"
+    },
+    {
+      "path": "business-core/capabilities/manage-cart.json",
+      "sha256": "9fbdba461fdbc7e963e784f1d9cc16c460a98e4119d96eaf045165118301ceb3"
+    },
+    {
+      "path": "business-core/capabilities/search-products.json",
+      "sha256": "1711d8e7f327b629f438dccdc346462b44f301e5ea1b38e837c45c322aa6f3e1"
+    },
+    {
+      "path": "business-core/capabilities/submit-purchase.json",
+      "sha256": "5a0493a53305e0a14fe190d9ff53a682664f7b93fd2de8fbbbe5f04e5922f83a"
+    },
+    {
+      "path": "context-model/capability-bindings.json",
+      "sha256": "e72a7b03fc8e68d041c1990325ce20eb5d0e733250c537b682e87fa14453e06b"
+    },
+    {
+      "path": "platform-core/reviewed/storefront-account.evidence.jsonl",
+      "sha256": "294b43a37932440c1a6ed5df8e4aa290f59d775159546e154d733614fbd56c7d"
+    },
+    {
+      "path": "platform-core/reviewed/storefront-cart-checkout.evidence.jsonl",
+      "sha256": "be9416c23bf42dbcf283e42f4fc85a3040b8fa2856477955d3731844517bb46f"
+    },
+    {
+      "path": "platform-core/reviewed/storefront-catalog.evidence.jsonl",
+      "sha256": "0efbf04f55a21040969d81e0cc08f0a32bbf19bb66b74345a9b85c2d8872e2fe"
+    },
+    {
+      "path": "platform-core/reviewed/storefront-orders.evidence.jsonl",
+      "sha256": "884ec968b43b5071cd1148ed988d6d5e6c884b1d0b1a2888963ad3d0bada7473"
+    }
+  ]
+}

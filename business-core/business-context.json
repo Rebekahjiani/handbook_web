@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "contexts": [
+    {"id": "catalog-exploration", "meaning": "The customer is locating or comparing products before purchase."},
+    {"id": "authenticated-shopping", "meaning": "A customer identity has been established for account-bound operations."},
+    {"id": "purchase-preparation", "meaning": "At least one intended purchase is being prepared for submission."},
+    {"id": "purchase-authorization", "meaning": "The task authorizes creation of an order and the required purchase information is available."},
+    {"id": "order-analysis", "meaning": "Existing purchases are being retrieved, compared, filtered, or aggregated."}
+  ]
+}

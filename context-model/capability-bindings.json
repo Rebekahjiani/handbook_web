@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "bindings": [
+    {"id": "bind-browse-catalog", "capability_id": "browse-catalog", "surface_id": "storefront-catalog", "platform_action_ids": ["catalog-browse-category", "catalog-advance-results"], "status": "supported", "evidence_ids": ["catalog-home-category-pagination"]},
+    {"id": "bind-search-products", "capability_id": "search-products", "surface_id": "storefront-catalog", "platform_action_ids": ["catalog-search-products"], "status": "supported", "evidence_ids": ["catalog-search-results"]},
+    {"id": "bind-inspect-product", "capability_id": "inspect-product", "surface_id": "storefront-catalog", "platform_action_ids": ["catalog-inspect-product"], "status": "supported", "evidence_ids": ["catalog-product-detail-review-surface"]},
+    {"id": "bind-establish-account", "capability_id": "establish-account", "surface_id": "storefront-account", "platform_action_ids": ["account-create", "account-access"], "status": "supported", "evidence_ids": ["account-registration-authenticated", "account-existing-session"]},
+    {"id": "bind-manage-cart", "capability_id": "manage-cart", "surface_id": "storefront-cart-checkout", "platform_action_ids": ["cart-add-product"], "status": "supported", "evidence_ids": ["cart-add-and-nonempty"]},
+    {"id": "bind-submit-purchase", "capability_id": "submit-purchase", "surface_id": "storefront-cart-checkout", "platform_action_ids": ["checkout-prepare", "checkout-submit-order"], "status": "supported", "evidence_ids": ["checkout-payment-ready", "checkout-order-confirmed"]},
+    {"id": "bind-inspect-orders", "capability_id": "inspect-orders", "surface_id": "storefront-orders", "platform_action_ids": ["orders-inspect-history", "orders-inspect-detail"], "status": "supported", "evidence_ids": ["orders-empty-history", "orders-single-history-detail", "orders-multiple-history-detail"]},
+    {"id": "bind-aggregate-orders", "capability_id": "aggregate-orders", "surface_id": "storefront-orders", "platform_action_ids": ["orders-inspect-history", "orders-inspect-detail"], "status": "supported", "evidence_ids": ["orders-multiple-history-detail"]}
+  ]
+}

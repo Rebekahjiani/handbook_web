@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-catalog",
+  "evidence": [
+    {"id": "catalog-home-category-pagination", "reviewed_source_path": "platform-core/reviewed/storefront-catalog.evidence.jsonl", "reviewed_source_sha256": "0efbf04f55a21040969d81e0cc08f0a32bbf19bb66b74345a9b85c2d8872e2fe", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "catalog-search-results", "reviewed_source_path": "platform-core/reviewed/storefront-catalog.evidence.jsonl", "reviewed_source_sha256": "0efbf04f55a21040969d81e0cc08f0a32bbf19bb66b74345a9b85c2d8872e2fe", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "catalog-product-detail-review-surface", "reviewed_source_path": "platform-core/reviewed/storefront-catalog.evidence.jsonl", "reviewed_source_sha256": "0efbf04f55a21040969d81e0cc08f0a32bbf19bb66b74345a9b85c2d8872e2fe", "reviewed_at": "2026-08-28T05:33:19Z"}
+  ]
+}

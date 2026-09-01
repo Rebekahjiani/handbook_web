@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-account",
+  "observations": [
+    {"id": "account-registration-complete", "condition": "Fresh account creation has established an authenticated account state.", "evidence_ids": ["account-registration-authenticated"]},
+    {"id": "account-authenticated", "condition": "Account information is available for the active session.", "evidence_ids": ["account-registration-authenticated", "account-existing-session"]}
+  ]
+}

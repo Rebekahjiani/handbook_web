@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "search-products",
+  "object_ids": ["product-collection", "product"],
+  "inputs": ["A product expression or identifying attributes."],
+  "outputs": ["Products matching the observed search result state."],
+  "business_conditions": ["Search terms should preserve the requested identifying constraints.", "An empty-result policy remains unsupported until independently evidenced."],
+  "requires_context_ids": ["catalog-exploration"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["catalog-search-results"]}]
+}

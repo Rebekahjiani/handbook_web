@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "experiment": "webarena-shopping-skill-generator-paired20-20260901-v1",
+  "completed_at": "2026-09-01T15:18:16+08:00",
+  "classification": "paired_pilot_not_full_benchmark",
+  "validity": {
+    "planned_tasks": 20,
+    "completed_pairs": 20,
+    "missing_artifacts": 0,
+    "evaluator_returncode_nonzero": 0,
+    "infrastructure_failures": 0,
+    "agent_timeouts": [282],
+    "note": "Task 282 Skill run timed out and is retained as a valid agent failure. Its token telemetry is unavailable and is excluded only from token comparisons."
+  },
+  "accuracy": {
+    "baseline": {"successes": 16, "total": 20, "accuracy": 0.8},
+    "skill_routed": {"successes": 17, "total": 20, "accuracy": 0.85},
+    "absolute_delta": 0.05,
+    "positive_flips": [141],
+    "negative_flips": []
+  },
+  "routing": {
+    "skill_injected_tasks": [96, 118, 141, 161, 228, 234, 238, 240, 261, 264, 282, 299, 322, 330],
+    "fallback_tasks": [22, 164, 276, 313, 319, 332],
+    "injected": {"baseline_successes": 12, "skill_successes": 13, "total": 14},
+    "fallback": {"baseline_successes": 4, "skill_successes": 4, "total": 6},
+    "by_runtime_route": {
+      "catalog-aggregation": {"tasks": 2, "baseline_successes": 1, "skill_successes": 1},
+      "category-navigation": {"tasks": 2, "baseline_successes": 2, "skill_successes": 2},
+      "fallback": {"tasks": 6, "baseline_successes": 4, "skill_successes": 4},
+      "order-aggregation": {"tasks": 2, "baseline_successes": 1, "skill_successes": 2},
+      "order-lookup": {"tasks": 4, "baseline_successes": 4, "skill_successes": 4},
+      "product-selection": {"tasks": 2, "baseline_successes": 2, "skill_successes": 2},
+      "search-discovery": {"tasks": 2, "baseline_successes": 2, "skill_successes": 2}
+    }
+  },
+  "cost": {
+    "all_token_comparable_pairs": 19,
+    "all": {
+      "baseline_mean_input": 547318.32,
+      "skill_mean_input": 590794.63,
+      "mean_input_delta_percent": 7.94,
+      "baseline_mean_output": 5854.58,
+      "skill_mean_output": 7354.58,
+      "mean_output_delta_percent": 25.62,
+      "baseline_mean_tools": 18.85,
+      "skill_mean_tools": 18.45,
+      "mean_tools_delta_percent": -2.12
+    },
+    "injected_token_comparable_pairs": 13,
+    "injected": {
+      "baseline_mean_input": 609438.0,
+      "skill_mean_input": 614085.54,
+      "mean_input_delta_percent": 0.76,
+      "baseline_mean_output": 4739.31,
+      "skill_mean_output": 5959.15,
+      "mean_output_delta_percent": 25.74,
+      "baseline_mean_tools": 20.43,
+      "skill_mean_tools": 18.79,
+      "mean_tools_delta_percent": -8.04,
+      "input_improved_pairs": 5,
+      "input_regressed_pairs": 8
+    },
+    "fallback": {
+      "baseline_mean_input": 412725.67,
+      "skill_mean_input": 540331.0,
+      "mean_input_delta_percent": 30.92
+    }
+  },
+  "contract": {
+    "injected_audits_passed": 14,
+    "injected_audits_total": 14,
+    "violations": 0,
+    "answer_evidence_ledger_tasks": [96, 141, 228, 322, 330]
+  },
+  "tasks": [
+    {"task_id": 22, "baseline": 1, "skill": 1, "injected": false, "route": null, "baseline_input": 172910, "skill_input": 213774, "baseline_tools": 12, "skill_tools": 11},
+    {"task_id": 96, "baseline": 1, "skill": 1, "injected": true, "route": "order-lookup", "baseline_input": 626434, "skill_input": 398066, "baseline_tools": 20, "skill_tools": 15},
+    {"task_id": 118, "baseline": 1, "skill": 1, "injected": true, "route": "search-discovery", "baseline_input": 130566, "skill_input": 181516, "baseline_tools": 6, "skill_tools": 8},
+    {"task_id": 141, "baseline": 0, "skill": 1, "injected": true, "route": "order-aggregation", "baseline_input": 473327, "skill_input": 787430, "baseline_tools": 16, "skill_tools": 23},
+    {"task_id": 161, "baseline": 1, "skill": 1, "injected": true, "route": "search-discovery", "baseline_input": 2801393, "skill_input": 1246559, "baseline_tools": 57, "skill_tools": 23},
+    {"task_id": 164, "baseline": 1, "skill": 1, "injected": false, "route": null, "baseline_input": 85220, "skill_input": 85321, "baseline_tools": 6, "skill_tools": 6},
+    {"task_id": 228, "baseline": 1, "skill": 1, "injected": true, "route": "catalog-aggregation", "baseline_input": 579735, "skill_input": 352951, "baseline_tools": 17, "skill_tools": 11},
+    {"task_id": 234, "baseline": 1, "skill": 1, "injected": true, "route": "order-lookup", "baseline_input": 255344, "skill_input": 988243, "baseline_tools": 11, "skill_tools": 24},
+    {"task_id": 238, "baseline": 1, "skill": 1, "injected": true, "route": "product-selection", "baseline_input": 600179, "skill_input": 1136034, "baseline_tools": 15, "skill_tools": 25},
+    {"task_id": 240, "baseline": 1, "skill": 1, "injected": true, "route": "product-selection", "baseline_input": 616065, "skill_input": 577573, "baseline_tools": 18, "skill_tools": 14},
+    {"task_id": 261, "baseline": 1, "skill": 1, "injected": true, "route": "category-navigation", "baseline_input": 149990, "skill_input": 161572, "baseline_tools": 7, "skill_tools": 6},
+    {"task_id": 264, "baseline": 1, "skill": 1, "injected": true, "route": "category-navigation", "baseline_input": 547941, "skill_input": 91436, "baseline_tools": 17, "skill_tools": 4},
+    {"task_id": 276, "baseline": 1, "skill": 1, "injected": false, "route": null, "baseline_input": 88773, "skill_input": 88916, "baseline_tools": 5, "skill_tools": 5},
+    {"task_id": 282, "baseline": 0, "skill": 0, "injected": true, "route": "catalog-aggregation", "baseline_input": 3456685, "skill_input": null, "baseline_tools": 59, "skill_tools": 49, "skill_runtime": "timeout"},
+    {"task_id": 299, "baseline": 1, "skill": 1, "injected": true, "route": "order-lookup", "baseline_input": 250144, "skill_input": 507878, "baseline_tools": 11, "skill_tools": 16},
+    {"task_id": 313, "baseline": 1, "skill": 1, "injected": false, "route": null, "baseline_input": 501720, "skill_input": 720503, "baseline_tools": 24, "skill_tools": 30},
+    {"task_id": 319, "baseline": 0, "skill": 0, "injected": false, "route": null, "baseline_input": 442187, "skill_input": 999389, "baseline_tools": 15, "skill_tools": 25},
+    {"task_id": 322, "baseline": 1, "skill": 1, "injected": true, "route": "order-lookup", "baseline_input": 335490, "skill_input": 826179, "baseline_tools": 13, "skill_tools": 23},
+    {"task_id": 330, "baseline": 1, "skill": 1, "injected": true, "route": "order-aggregation", "baseline_input": 556086, "skill_input": 727675, "baseline_tools": 19, "skill_tools": 22},
+    {"task_id": 332, "baseline": 0, "skill": 0, "injected": false, "route": null, "baseline_input": 1185544, "skill_input": 1134083, "baseline_tools": 29, "skill_tools": 29}
+  ],
+  "decision": {
+    "observed": "The current routed Skill condition improved this 20-task pilot by one success without a negative flip.",
+    "not_established": "The sample is too small and has only one discordant pair, so this does not establish a general benchmark-wide improvement.",
+    "next_priority": "Modify the Skill generator, capability router, and response machine contract before collecting more generic trace or changing the frozen Context Model form. Add targeted trace only when a concrete missing site fact is identified."
+  },
+  "artifacts": {
+    "plan": "/Users/rebekah/handbook_web/experiments/webarena-shopping-skill-generator-paired20-20260901/plan.json",
+    "server_output_root": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-paired20-20260901-v1"
+  }
+}

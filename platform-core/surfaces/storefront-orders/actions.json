@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-orders",
+  "actions": [
+    {"id": "orders-inspect-history", "kind": "context", "intent": "Inspect the account order collection and distinguish empty from populated history.", "evidence_ids": ["orders-empty-history", "orders-single-history-detail", "orders-multiple-history-detail"]},
+    {"id": "orders-inspect-detail", "kind": "context", "intent": "Inspect the details associated with one order.", "evidence_ids": ["orders-single-history-detail", "orders-multiple-history-detail"]}
+  ]
+}

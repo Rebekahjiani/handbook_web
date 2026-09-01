@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "establish-account",
+  "object_ids": ["customer-account"],
+  "inputs": ["Customer identity information permitted by the task."],
+  "outputs": ["An authenticated customer account context."],
+  "business_conditions": ["Credentials and personal information must remain outside the reusable model.", "Unsupported authentication failures must not be guessed around."],
+  "requires_context_ids": ["authenticated-shopping"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["account-registration-authenticated", "account-existing-session"]}]
+}

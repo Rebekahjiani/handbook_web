@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-account",
+  "actions": [
+    {"id": "account-create", "kind": "operation", "intent": "Create an account and establish an authenticated session.", "evidence_ids": ["account-registration-authenticated"]},
+    {"id": "account-access", "kind": "context", "intent": "Access information associated with the authenticated account.", "evidence_ids": ["account-existing-session"]}
+  ]
+}

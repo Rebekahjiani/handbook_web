@@ -9,6 +9,16 @@ handbooks/**/snapshots/
 handbooks/**/*.previous-*/
 handbooks/**/previous-*/
 
+# ContextModelTracer 采集的原始 trace（体积大，不进 git 历史）
+platform-core/dev/
+
+# 实验原始运行产物（network.har / agent_response.json 等，体积大且可复现，不进 git 历史）
+experiments/independent-exploration/
+experiments/webarena-handbook-iteration/
+
+# Playwright MCP 浏览器缓存
+.playwright-mcp/
+
 # Optional: avoid layering large binary results into Git history
 *.png
 *.jpg
