@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "submit-purchase",
+  "object_ids": ["shopping-cart", "checkout", "order"],
+  "inputs": ["A nonempty cart, required purchase information, and explicit task authorization."],
+  "outputs": ["A confirmed order or a clearly established non-success state."],
+  "business_conditions": ["Order submission is allowed only when the task explicitly authorizes the side effect.", "Confirmation is required before reporting that an order exists.", "Only the evidenced payment path is currently supported."],
+  "requires_context_ids": ["authenticated-shopping", "purchase-preparation", "purchase-authorization"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["checkout-payment-ready", "checkout-order-confirmed"]}]
+}

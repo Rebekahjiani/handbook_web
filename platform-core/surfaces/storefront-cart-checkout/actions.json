@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-cart-checkout",
+  "actions": [
+    {"id": "cart-add-product", "kind": "operation", "intent": "Add a selected product to the active cart.", "evidence_ids": ["cart-add-and-nonempty"]},
+    {"id": "checkout-prepare", "kind": "operation", "intent": "Advance a nonempty cart through required checkout information.", "evidence_ids": ["checkout-payment-ready"]},
+    {"id": "checkout-submit-order", "kind": "operation", "intent": "Submit the prepared purchase and establish an order.", "evidence_ids": ["checkout-order-confirmed"]}
+  ]
+}

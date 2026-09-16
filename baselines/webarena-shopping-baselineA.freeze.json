@@ -1,0 +1,52 @@
+{
+  "schema_version": "1",
+  "frozen_at": "2026-08-28T05:33:19Z",
+  "benchmark": {
+    "name": "WebArena-Verified",
+    "version": "1.2.3",
+    "scope": "all 192 tasks containing the shopping site"
+  },
+  "conditions": [
+    {
+      "id": "baselineA-Mac-historical-v1",
+      "status": "frozen",
+      "agent": "阿器",
+      "model": "labgateway/sophnet/DeepSeek-V4-Flash-0731",
+      "experiment_group": "baseline",
+      "skill_injected": false,
+      "site_reset": false,
+      "timeout_seconds": 600,
+      "evaluated_tasks": 192,
+      "successful_tasks": 98,
+      "failed_tasks": 94,
+      "accuracy": 0.5104,
+      "output_root": "/Users/rebekah/artifacttrace/local-at/benchmarks/runs/webarena-verified-baselineA-aqi-allshopping-20260824/baseline",
+      "use": "historical reference only"
+    },
+    {
+      "id": "baselineA-server-estimated-v0",
+      "status": "provisional_estimate",
+      "agent": "阿器",
+      "model": "labgateway/sophnet/DeepSeek-V4-Flash-0731",
+      "experiment_group": "baseline",
+      "skill_injected": false,
+      "site_reset": true,
+      "timeout_seconds": 600,
+      "evaluated_tasks": 192,
+      "estimated_successful_tasks": 106,
+      "estimated_failed_tasks": 86,
+      "estimated_accuracy": 0.552,
+      "derivation": "Mac success set adjusted with server reruns of the Mac failure set; not a complete 192-task server rerun",
+      "use": "planning reference only; not the final paired server baseline"
+    }
+  ],
+  "source": {
+    "path": "/Users/rebekah/artifacttrace/handoff.md",
+    "sha256": "0c64d40c7a68b9c98d47addcc396f806e8b83c87641e4d47f8c7d803d84a7fe6"
+  },
+  "constraints": [
+    "Context Model construction must not modify these baseline results.",
+    "A future final server baseline must rerun all 192 tasks under one server protocol.",
+    "Task identifiers, one-off answers, product values, and order identifiers must not be copied into the Context Model."
+  ]
+}

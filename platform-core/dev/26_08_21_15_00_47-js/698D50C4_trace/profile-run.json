@@ -1,0 +1,41 @@
+{
+  "profileId": "ea2f6198-9b8e-41bf-9163-6f8b853d2e47",
+  "traceId": "fe1f7317-a20c-48e4-9f84-2197ea8eaaf0",
+  "pageName": "webarena_shopping",
+  "basename": "698D50C4",
+  "status": "completed",
+  "targetHint": "",
+  "cdpPort": 9222,
+  "preCaptureDir": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_pre",
+  "traceDir": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_trace",
+  "title": "One Stop Market",
+  "url": "http://localhost:7770/",
+  "startedAt": "2026-08-21T07:00:48.084Z",
+  "postCaptureDir": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_post",
+  "stoppedAt": "2026-08-21T07:03:19.690Z",
+  "durationMs": 151606,
+  "networkEventCount": 7692,
+  "interactionCount": 0,
+  "warningCount": 0,
+  "traceOutputs": {
+    "traceSegments": [
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000001.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000002.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000003.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000004.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000005.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000006.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000007.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000008.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000009.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000010.jsonl",
+      "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000011.jsonl"
+    ],
+    "traceSegmentsManifest": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segments.manifest.json",
+    "traceSegmentsSummary": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segments.summary.json",
+    "networkJsonl": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_trace/network.jsonl",
+    "interactionsJsonl": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_trace/interactions.jsonl",
+    "metadata": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_trace/metadata.json",
+    "profileRun": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_trace/profile-run.json"
+  }
+}

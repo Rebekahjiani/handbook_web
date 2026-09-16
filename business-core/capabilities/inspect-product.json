@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "inspect-product",
+  "object_ids": ["product"],
+  "inputs": ["A product selected from a product collection."],
+  "outputs": ["Observed product identity, price, descriptive attributes, and review-related state."],
+  "business_conditions": ["Product identity must be confirmed before using its attributes.", "Review structure does not prove that populated reviews exist."],
+  "requires_context_ids": ["catalog-exploration"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["catalog-product-detail-review-surface"]}]
+}

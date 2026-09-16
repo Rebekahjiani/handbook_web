@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-catalog",
+  "observations": [
+    {"id": "catalog-home-visible", "condition": "The storefront entry state is available.", "evidence_ids": ["catalog-home-category-pagination"]},
+    {"id": "catalog-category-results-visible", "condition": "A category result collection and its current result segment are observable.", "evidence_ids": ["catalog-home-category-pagination"]},
+    {"id": "catalog-search-results-visible", "condition": "A search result collection and result count are observable.", "evidence_ids": ["catalog-search-results"]},
+    {"id": "catalog-product-detail-visible", "condition": "A product identity, price, and review-related state are observable.", "evidence_ids": ["catalog-product-detail-review-surface"]}
+  ]
+}

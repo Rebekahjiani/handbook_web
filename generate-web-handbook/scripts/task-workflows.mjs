@@ -3,42 +3,117 @@ import {
   contextForWorkflow,
   contextModelMarkdown,
 } from "./context-model.mjs";
+import { shoppingAdapterFor, shoppingCollectionAction } from "./workflows/shopping.mjs";
+import { parseTaskRequirements } from "./capability-router.mjs";
 
-const WORKFLOWS = [
+export const WORKFLOWS = [
   {
     id: "order-aggregation",
+    capabilitySignature: {
+      entity: "order",
+      operations: ["aggregate", "lookup"],
+      selection: [
+        { field: "purchase_date", operator: "latest" },
+        { field: "status", operator: "exists" },
+        { field: "status", operator: "eq", value: "pending" },
+        { field: "status", operator: "eq", value: "processing" },
+        { field: "status", operator: "eq", value: "completed" },
+        { field: "status", operator: "eq", value: "cancelled" },
+        { field: "status", operator: "eq", value: "canceled" },
+        { field: "status", operator: "eq", value: "refunded" },
+        { field: "status", operator: "neq", value: "cancelled" },
+        { field: "status", operator: "neq", value: "canceled" },
+        { field: "status", operator: "neq", value: "refunded" },
+        { field: "purchase_date", operator: "eq" },
+        { field: "purchase_date", operator: "range" },
+        { field: "product_category", operator: "eq" },
+      ],
+      outputs: ["order_number", "purchase_date", "status", "grand_total", "item_subtotal", "order_count", "count", "amount", "month", "total"].map((field) => ({ field, type: ["grand_total", "item_subtotal", "order_count", "count", "amount", "total"].includes(field) ? "number" : "string" })),
+      executionDependencies: ["detail_url"],
+      requiresDetail: true,
+    },
+    runtimeMode: "workflow_skill",
     kind: "domain",
     title: "订单筛选、金额聚合与退款",
     keywords: "订单数量、消费金额、时间范围、商品类别、退款",
     modelTerms: ["order", "history"],
     task:
-      /how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping/i,
+      /how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping/i,
+    preflightGuards: [
+      {
+        id: "missing-past-months-window",
+        when: {
+          all: [
+            { field: "task.intent", contains: "past months" },
+            { field: "task.intent", notMatches: "\\b\\d+\\b" },
+            {
+              field: "task.intent",
+              notMatches: "\\b(?:from|between|after|before|since)\\b",
+            },
+          ],
+        },
+        action: {
+          type: "return_zero_value",
+          responseSchema: "task.expected_response",
+        },
+        before: "browser.navigation",
+      },
+    ],
     evidence: /order|purchase|refund|shipping|billing|订单|退款/i,
     coverage: /order|purchase|refund|shipping method|billing address|订单|退款/i,
     steps: [
-      "先把日期上下界、订单状态、商品条件和运费口径写成固定筛选条件。",
+      "先做时间表达式预检：若任务只写 `past months` 但没有数量或上下界，停止执行浏览流程，按任务 schema 直接返回零值对象，不要打开订单历史。",
+      "任务含 “past N months” 时先算出精确下界日期（任务日期减 N 乘以 30 天，严格晚于该日期才算），并把下界日期、订单状态、商品条件和运费口径写成固定筛选条件；禁止把 N months 当成年/月至月初。",
       "在订单历史中一次读取每页的订单号、日期、状态、总额和详情链接；记录页面身份、行数与 Next。",
       "只为筛选后的订单打开详情；按任务口径读取商品小计、数量、运费和总额。",
       "只有已访问行数覆盖页面报告的总记录数，或在完整当前页确认 Next 不存在后，才用去重台账计数或求和。",
     ],
     success: [
-      "每个计入结果的订单都满足日期、状态和商品条件。",
-      "计数、分组和金额都能回溯到同一份去重台账。",
+      "非空结果：accepted_records 非空，且每条记录都有日期、状态和商品条件的行级证据。" +
+        "——空结果：accepted_records 为空，且已记录终页证据（最后一页 URL、已访问行数、页面报告总数三者吻合）。两种情况必须满足其中之一，不得仅凭台账为空就声明 SUCCESS。",
+      "计数、金额和分组能回溯到同一份去重台账；无匹配时先读取任务要求的输出 schema：若任务要求对象字段，返回零值对象；只有任务协议明确使用 null 时才返回 null。",
     ],
     checks: [
-      "“spent”默认排除 Canceled；退款任务只处理 Canceled，除非任务明确另有状态口径。",
+      "“spent”默认先排除 Canceled 和 Refunded，再做月份分组或金额求和；退款任务只处理 Canceled/Refunded，除非任务明确另有状态口径。",
       "包含运费时使用 Grand Total；排除运费或按商品类别统计时使用商品小计，不要用 Grand Total。",
+      "包含 shipping/handling 时，逐订单同时记录商品小计、shipping、handling、Grand Total 和状态；Grand Total 缺失或未核对时不得用小计代替总额。",
+      "金额聚合前逐行复核时间窗口、complete 状态和金额字段；订单数量正确但金额字段缺失仍视为未完成。",
       "退款先建立逐订单账本，再按 `可退商品小计 - 明确保留商品行金额 + 可退运费` 计算；每个保留项和运费口径都必须有行级证据。",
-      "“过去 N 个月”按包含当前月的 N 个日历月解释；只有任务明确给出天数或滚动日期时才使用滚动窗口。",
+      "WebArena 日期口径：若任务写 “past N months/过去 N 个月”，按任务日期向前回推 N*30 天，且订单日期必须严格晚于下界；“过去 N 天”同样严格晚于下界。只有任务明确写 calendar month/month-to-date 时才使用日历月口径。例如任务日期 2023-06-12、past 6 months：下界 = 2023-06-12 减 180 天 = 2022-12-14，只计入 12/14 之后（不含当天）的订单；past 4 months = 减 120 天 = 2023-02-12。不要把 “6 months” 展开成日历月（1-6 月）或用月初作下界。",
+      "若任务只写 `past months` 但没有数量或上下界，不得扩成全部历史；把时间范围标记为不完整，返回零值对象或阻塞证据，不能猜测 SUCCESS。",
       "进入详情后核对页面订单号；商品类别优先以站点分类和商品用途判断：主用途属于目标类别才计入，名称近似但用途不同的配件不计入。",
-      "食品相关可包含烘焙装饰等直接用于食品的商品；hair care/style 只包含护理或造型产品，不包含纯装饰配件。",
+      "品类口径（本数据集校准判例）：食品(food/cooking)包含烘焙食品如玉米松饼杂粮粉（corn muffin mix）、即食餐（MRE/beef cholent）、食品饮料（chai、orange juice），以及直接用于食品的装饰如蛋糕装饰配件（cake topper 彩虹生日派对用品）——cake topper 计入 food 类；hair care/style 只包含护理和染发造型产品（conditioner、haircolor/dye），不包含身体护理（body butter、body lotion）和纯装饰配件（发箍 headbands、珠饰发夹）——body butter 与 hairbands 不计入 hair care。",
+      "按类别或月份统计时不使用 Canceled/Refunded 订单中的商品（“spent”语义排除未实际支出的订单），先按状态过滤，再分组求和；类目金额用于类目内商品小计，包含运费时再加 Grand Total 与 subtotal 之差。",
       "不能因当前页没有分页控件就断言只有一页；同时核对总记录文本、已访问行数和页面身份。",
-      "无匹配记录时返回任务协议要求的空值；不要用空数组代替 null。",
+      "无匹配记录时严格遵守任务要求的返回类型：对象任务返回对象的零值字段，列表任务才返回空列表，明确 null 协议才返回 null。",
     ],
     risk: "查看订单通常无副作用；取消、退货或再次购买属于写操作，不要代替用户提交。",
   },
   {
     id: "order-lookup",
+    capabilitySignature: {
+      entity: "order",
+      operations: ["lookup", "read"],
+      selection: [
+        { field: "purchase_date", operator: "latest" },
+        { field: "status", operator: "exists" },
+        { field: "status", operator: "eq", value: "pending" },
+        { field: "status", operator: "eq", value: "processing" },
+        { field: "status", operator: "eq", value: "completed" },
+        { field: "status", operator: "eq", value: "cancelled" },
+        { field: "status", operator: "eq", value: "canceled" },
+        { field: "status", operator: "eq", value: "refunded" },
+        { field: "status", operator: "neq", value: "cancelled" },
+        { field: "status", operator: "neq", value: "canceled" },
+        { field: "purchase_date", operator: "eq" },
+        { field: "purchase_date", operator: "range" },
+        { field: "product_category", operator: "eq" },
+      ],
+      outputs: ["order_number", "purchase_date", "status", "arrival_date"].map((field) => ({ field, type: "string" })),
+      executionDependencies: ["detail_url"],
+      requiresDetail: true,
+    },
+    runtimeMode: "workflow_skill",
     kind: "domain",
     backoff: true,
     title: "订单查找与已购商品属性",
@@ -55,8 +130,9 @@ const WORKFLOWS = [
       "读取任务要求的字段或商品选项，保留页面显示的单位和格式。",
     ],
     success: [
-      "列表行、详情页订单号和目标条件属于同一对象。",
-      "返回值保留页面显示的单位；无匹配时回到订单历史首页再结束。",
+      "找到目标：列表行与详情页订单号一致，且目标条件有行级证据。" +
+        "——无匹配：已记录终页证据（末页 URL、已访问行数、页面报告总数一致），再回到订单历史首页结束。两种情况必须满足其中之一。",
+      "返回值保留页面显示的单位；不得靠猜测或拼接 URL 构造结果。",
     ],
     checks: [
       "分页后废弃旧引用；不要根据订单号拼接详情 URL。",
@@ -112,6 +188,7 @@ const WORKFLOWS = [
   },
   {
     id: "reviews",
+    runtimeMode: "contract_only",
     kind: "domain",
     title: "商品详情与评论",
     keywords: "商品详情、评论、评分、评论者、评论标题、摘要",
@@ -123,12 +200,12 @@ const WORKFLOWS = [
     coverageScope: "full",
     steps: [
       "确认当前商品名称与任务一致。",
-      "进入评论区域，按评分、文本条件或分页范围读取。",
-      "把评论者、标题、评分和正文保持在同一条评论上下文中。",
+      "进入评论区域，按评分或文本条件读取；评论区有独立分页时逐页读取，按（作者＋标题＋评分）复合键去重，不得仅读首屏可见评论就声明完整。",
+      "把评论者、标题、评分和正文保持在同一条评论容器中。",
       "去重后按任务指定的数据结构返回。",
     ],
     success: [
-      "结果全部来自目标商品，且满足评分或文本条件。",
+      "结果全部来自目标商品，满足评分或文本条件，且已覆盖全部评论分页（末页无 Next 或已达到任务要求的数量上限）。",
       "没有把相邻评论的作者、标题和正文混在一起。",
     ],
     checks: [
@@ -163,14 +240,15 @@ const WORKFLOWS = [
   },
   {
     id: "category-navigation",
+    runtimeMode: "contract_only",
     kind: "core",
     title: "分类页导航与价格过滤",
     keywords: "打开分类、浏览商品、分类页、价格上限",
     modelTerms: ["search", "category", "listing"],
     task:
-      /open .*category page|category page.*filtered|browse products/i,
+      /open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)/i,
     evidence:
-      /search|category|sort|filter|price|next|view as|搜索|分类|筛选|排序/i,
+      /\bcategory\b|category page|breadcrumb|catalog|menu|navigation|分类|面包屑|菜单/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
       "从已观察到的分类路径提示中选择语义最精确的一条；没有提示时再沿菜单逐级进入。",
@@ -198,26 +276,27 @@ const WORKFLOWS = [
     task:
       /price range|full names|available models|products from/i,
     evidence:
-      /search|category|sort|filter|price|next|view as|搜索|分类|筛选|排序/i,
+      /toolbar-amount|pages-item-next|limiter|per page|total.*result|page.*of|分页|每页|共.*件/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
-      "用最短且有区分度的查询词建立候选集，并固定品牌、类别和产品类型条件。",
-      "把页面显示数量调到最大，记录总结果数和当前页身份；每页只做一次 DOM 批量读取，得到名称、价格和链接。",
-      "按 Next 逐页去重；只有完整当前页没有 Next，或已访问商品数覆盖总结果数时才停止，禁止根据前几页内容推断后续没有目标。",
-      "用标题、分类/面包屑和详情主商品身份共同筛选；目标作为主商品时可包含附件套装，目标仅作为附赠品时排除。",
+      "先按输出选择证明策略：只有 min/max 的价格范围任务使用精确类别内的升序/降序边界证明；要求完整名称或型号集合时先用一个核心产品类型词做普通搜索，闭合小结果集后按品牌和硬约束筛选。",
+      "边界证明分别构造价格升序与降序的规范类别 URL，直接带最大 `product_list_limit` 和排序参数；每页批量读取后按顺序选择第一个满足产品类型、品牌和其他硬约束的候选。",
+      "完整集合证明把页面显示数量调到最大，记录总结果数和当前页身份；按 Next 逐页去重，只有没有 Next 或已覆盖总结果数时才停止。",
+      "完整集合若无法从主查询证明语义召回闭合，可执行一次单个产品类型同义词的普通搜索；两次查询分别闭合分页后按商品 URL 合并去重。",
+      "先用列表标题筛选主商品身份；仅当标题语义确实歧义时才打开少量详情，不得为证明类别而绕行分类页或枚举导航菜单。目标作为主商品时可包含附件套装，目标仅作为附赠品时排除。",
       "从同一候选台账返回完整名称、最小价和最大价。",
     ],
     success: [
-      "候选集合覆盖全部结果页且没有近似商品。",
+      "完整列表任务覆盖全部查询结果页；仅 min/max 任务分别证明升序和降序边界上的第一个合格候选。",
       "名称列表与 min/max 来自同一份去重候选台账。",
     ],
     checks: [
       "每个候选必须同时满足核心产品词和品牌；不能只因搜索命中就计入。",
       "品牌和产品类型可由标题或站点分类证明；不要要求自然语言同义词必须逐字出现在标题。",
-      "优先把每页显示数量调到最大，再遍历分页。",
-      "查询预算是一个主查询加至多一个召回补充查询；每个规范 URL 只读取一次，不检查与任务无关的筛选器。",
+      "优先把每页显示数量调到最大；通过规范 URL 一次设置分页量和排序，不要重复操作同一个下拉框。",
+      "完整列表的查询预算是一个单核心产品词主查询加至多一个直接同义词补充查询；仅 min/max 的边界证明不执行这两个查询。每个规范 URL 只读取一次。",
       "维护 `已访问页/总结果/已读取卡片/去重候选` 四个计数；任何一个无法解释时不得声称集合完整。",
-      "召回补充查询只补主查询缺少的品牌或类型证据；合并后按商品 URL 去重，再统一做语义验收。",
+      "召回补充查询只替换产品类型同义词，必须保留品牌与其他硬约束；不得给查询加引号制造精确短语搜索。即使主查询已有候选，只要完整聚合仍无法证明同义词召回闭合，也允许使用。合并后按商品 URL 去重，再统一做语义验收。",
       "完成分页后立刻计算并返回，不要为已确定的极值继续打开商品详情。",
     ],
     risk: "站内搜索可能返回广告、配件或相似词商品；必须按名称和类别逐条验收。",
@@ -231,18 +310,18 @@ const WORKFLOWS = [
     task:
       /product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between/i,
     evidence:
-      /search|category|sort|filter|price|next|view as|搜索|分类|筛选|排序/i,
+      /sort.by|sorter|sort-by|price asc|price desc|relevance|ascending|descending|排序|价格升序|价格降序/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
       "先解析比较器：`least expensive` 按价格升序，`most expensive` 按价格降序，`most recent released` 按产品发布日期降序；`best` 保留站点相关性或任务明确给出的质量信号。",
       "把候选验收拆成两个独立谓词：`is_target_product_type` 判断它是任务所说的主商品/配件类型，`satisfies_task_constraint` 判断平台兼容、容量等约束；两者都为真才进入候选集。多平台配件可用明确兼容性满足平台约束，不要求独占该平台分类；主机本体不能冒充配件。",
       "优先使用站点已有的精确分类或一次主搜索建立候选集并排序。在价格降序已验证生效后，从顶部依次验收，不跨到无关分类分支重新比较。",
       "按比较器顺序核对硬约束；容量、数量、兼容性必须修饰目标商品本身，优先用规格/详情证据，不把包装、附件或营销数字当容量。",
-      "找到第一个满足比较器和全部硬约束的候选后，用候选表保存的实时链接打开商品页。",
-      "重新读取当前 URL、标题、价格和约束证据；确认同一商品后立即结束，不再搜索、排序或返回首页。",
+      "找到第一个满足比较器和全部硬约束的候选后，从 accepted_candidates 台账中取出该商品的精确 URL，直接导航到该 URL（不通过再次点击搜索结果中的视觉元素）。",
+      "打开商品页后立刻执行字符串比较：location.href 必须等于台账中的精确 URL；不一致时重新导航，不得用视觉近似判断跳过该检查。确认后立即结束。",
     ],
     success: [
-      "最终位于满足所有硬约束的商品详情页。",
+      "最终位于满足所有硬约束的商品详情页，且 location.href 字符串等于 accepted_candidates 台账中该商品的精确 URL（非目测近似）。",
       "已证明在完整候选集内不存在按任务比较器更优且同样满足条件的商品。",
     ],
     checks: [
@@ -254,12 +333,14 @@ const WORKFLOWS = [
       "`most recent released` 比较产品发布日期；不得用型号数字、评论日期或页面更新时间替代。",
       "`best` 没有显式价格词时不得按最低价排序；优先站点默认相关性，再使用评分、评论量或与约束的精确匹配作为可解释信号。",
       "候选分类证据优先于标题是否逐字包含任务同义词；只有主商品类型冲突时才排除。",
+      "到达商品页后提交前重新读取当前 URL，确认它仍等于台账中的精确 URL。",
       "到达目标商品页后立刻结束，搜索结果页不能作为成功状态。",
     ],
     risk: "容量数字可能描述包装、附件或兼容数量；必须确认它修饰任务要求的属性。",
   },
   {
     id: "search-discovery",
+    runtimeMode: "contract_only",
     kind: "core",
     backoff: true,
     title: "通用搜索、筛选与商品发现",
@@ -370,6 +451,105 @@ const WORKFLOWS = [
   },
 ];
 
+const WORKFLOW_CAPABILITY_IDS = {
+  "order-aggregation": ["aggregate-orders"],
+  "order-lookup": ["inspect-orders"],
+  checkout: ["submit-purchase"],
+  "cart-lists": ["manage-cart"],
+  "account-forms": ["establish-account"],
+  "category-navigation": ["browse-catalog"],
+  "catalog-aggregation": ["browse-catalog"],
+  "product-selection": ["inspect-product"],
+  "search-discovery": ["search-products"],
+};
+
+const WORKFLOW_CAPABILITY_SIGNATURES = {
+  checkout: {
+    entity: "checkout",
+    operations: ["mutate"],
+    selection: [],
+    outputs: [{ field: "order_number", type: "string" }, { field: "status", type: "string" }],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+  "cart-lists": {
+    entity: "cart",
+    operations: ["mutate"],
+    selection: [],
+    outputs: [{ field: "product_name", type: "string" }, { field: "quantity", type: "number" }],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+  "account-forms": {
+    entity: "account",
+    operations: ["lookup", "read", "mutate"],
+    selection: [],
+    outputs: [{ field: "account_status", type: "string" }],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+  "category-navigation": {
+    entity: "catalog",
+    operations: ["lookup", "read"],
+    selection: [{ field: "product_category", operator: "eq" }],
+    outputs: [{ field: "category_url", type: "string" }],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+  "catalog-aggregation": {
+    entity: "product",
+    operations: ["aggregate", "lookup"],
+    selection: [],
+    outputs: [
+      { field: "product_name", type: "string" },
+      { field: "names", type: "array" },
+      ...["min_price", "max_price", "min", "max"].map((field) => ({ field, type: "number" })),
+    ],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+  "product-selection": {
+    entity: "product",
+    operations: ["lookup", "read"],
+    selection: [
+      { field: "price", operator: "min" },
+      { field: "price", operator: "max" },
+    ],
+    outputs: [{ field: "product_name", type: "string" }, { field: "price", type: "number" }, { field: "product_url", type: "string" }],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+  "search-discovery": {
+    entity: "product",
+    operations: ["lookup", "read"],
+    selection: [],
+    outputs: [{ field: "product_name", type: "string" }, { field: "product_url", type: "string" }],
+    executionDependencies: [],
+    requiresDetail: false,
+  },
+};
+
+function capabilityBackedDefinition(definition, contextModel, modelContext) {
+  const capabilityIds = WORKFLOW_CAPABILITY_IDS[definition.id] || [];
+  if (!capabilityIds.length) return definition;
+  const hasFormalBindings = (contextModel?.bindings || []).some(
+    (binding) => binding.capability_id,
+  );
+  const supportedIds = new Set(
+    (modelContext.bindings || [])
+      .filter((binding) => binding.status === "supported")
+      .map((binding) => binding.capability_id),
+  );
+  const supported = !hasFormalBindings || capabilityIds.every((id) => supportedIds.has(id));
+  return {
+    ...definition,
+    capabilityIds,
+    capabilitySignature: supported
+      ? definition.capabilitySignature || WORKFLOW_CAPABILITY_SIGNATURES[definition.id] || null
+      : null,
+  };
+}
+
 function clip(value, limit = 140) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
@@ -392,15 +572,30 @@ function taskIntent(task) {
   return task.intent || task.task || task.description || task.name || "";
 }
 
-function classifyTask(task) {
+function classifyTask(task, workflowDefs = WORKFLOWS) {
   const intent = taskIntent(task);
-  const matched =
-    WORKFLOWS.find((workflow) => workflow.task.test(intent)) || WORKFLOWS.at(-1);
-  if (["read-content", "edit-submit", "other"].includes(matched.id)) {
-    const navigation = WORKFLOWS.find((workflow) => workflow.id === "navigation");
-    if (navigation.task.test(intent)) return navigation;
+  const fallback = workflowDefs.at(-1);
+  let best = null;
+  let bestLen = -1;
+  for (const workflow of workflowDefs) {
+    if (workflow.fallback) continue;
+    const m = intent.match(workflow.task);
+    if (!m) continue;
+    const len = m[0].length;
+    if (len > bestLen) {
+      bestLen = len;
+      best = workflow;
+    }
   }
-  return matched;
+  if (!best) return fallback;
+  if (["read-content", "edit-submit", "other"].includes(best.id)) {
+    const navigation = workflowDefs.find((w) => w.id === "navigation");
+    if (navigation && navigation.task.test(intent)) {
+      const nm = intent.match(navigation.task);
+      if (nm && nm[0].length > bestLen) return navigation;
+    }
+  }
+  return best;
 }
 
 function locatorText(action, origin) {
@@ -496,6 +691,9 @@ function routeTerms(value) {
     ["mens", "men"],
     ["child", "children"],
     ["childrens", "children"],
+    ["earphone", "earbud"],
+    ["earphones", "earbud"],
+    ["earbuds", "earbud"],
     ["shelf", "shelves"],
   ]);
   const normalize = (term) => {
@@ -645,11 +843,24 @@ function rankLocators(workflow, pages, origin) {
       if (action.primary?.kind === "within") score += 3;
       if (!["header", "nav", "footer"].includes(action.region)) score += 2;
       if (workflow.evidence.test(action.name || "")) score += 2;
+      const evidence = [];
+      if (action.primary?.count === 1) evidence.push("unique");
+      if (["data-testid", "data-test", "data-qa", "aria-label"].some((key) =>
+        (action.candidates || []).some((candidate) => candidate.selector?.includes(key)))) {
+        evidence.push("stable-attribute");
+      }
+      if (action.primary?.kind === "within" || action.context) evidence.push("scoped");
+      if (action.tag === "input" || action.tag === "textarea" || action.tag === "select") {
+        evidence.push("form-bound");
+      }
       ranked.push({
         score,
+        confidence: Math.min(0.99, Number((0.45 + score / 20).toFixed(2))),
+        evidence,
         label: clip(action.name || `${action.role} 控件`, 72),
         locator,
         page: page.slug,
+        scope: action.context || action.region || null,
       });
     }
   }
@@ -662,17 +873,17 @@ function rankLocators(workflow, pages, origin) {
 
 const RUNTIME_BASE = `# 运行规则
 
-- 本技能已由总 router 按站点和任务预选；只执行本工作流。
-- 以实时浏览器状态为准。导航或分页后废弃旧引用，并重新核对 URL、标题和对象身份。
-- 列表任务优先在当前页面做一次作用域明确的 DOM 读取；不要反复保存或加载整页快照。
-- 保持一个短台账：目标、固定约束、已验证记录、未访问页。不要在执行中改变口径。
-- 每次分页只允许一次批量读取；记录页面身份，禁止重复访问同一页。
-- 提交前重新读取当前 URL、标题和目标对象；不得用旧观察描述最终状态。
-- 达到成功判据后立即结束。任务协议要求 NOT_FOUND 时使用 \`retrieved_data: null\`，不要用空数组。
-- 不得把中断、缺少证据或空结果包装成 SUCCESS；不得回答或索取下一题。
+- 只执行当前路由；保持目标、硬约束和已验证证据台账，不改变任务口径。
+- 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
+- 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
+- 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
+- 最终响应服从任务给出的 expected status：若为 \`NOT_FOUND_ERROR\`，\`retrieved_data\` 必须是 JSON \`null\`，不能返回 \`[]\`、\`[0]\` 或 \`[0.0]\`。
 `;
 
 function observedStructures(workflow, pages) {
+  // Product-list selectors are site/page evidence, not a generic order-table
+  // contract. Order workflows must not inherit them merely because their id
+  // contains "order".
   const wanted = /catalog|product|search|category/.test(workflow.id)
     ? new Set(["product-list", "pagination"])
     : new Set();
@@ -693,6 +904,70 @@ function observedStructures(workflow, pages) {
     }
   }
   return [...unique.values()];
+}
+
+function observedForms(definition, pages) {
+  if (!isMutatingWorkflow(definition)) return [];
+  const forms = (definition.formContracts || []).map((form) => ({
+    pageUrl: form.pageUrl || null,
+    evidence: "site-adapter-form-contract",
+    action: form.action || null,
+    method: form.method || "post",
+    selector: form.selector || null,
+    fields: form.fields || [],
+    submitButtons: form.submitButtons || [],
+    confirmations: form.confirmations || [],
+    postcondition: form.postcondition || "read-current-page-state-after-submit",
+    requiredNetworkEvent: form.requiredNetworkEvent || null,
+    repeatability: form.repeatability || null,
+  }));
+  const terms = new RegExp(
+    `${definition.id}|${definition.evidence?.source || "form|submit|save"}`,
+    "i",
+  );
+  for (const page of pages) {
+    for (const form of page.forms || []) {
+      const haystack = [
+        form.action,
+        form.method,
+        ...(form.fields || []).flatMap((field) => [field.name, field.type, field.label]),
+        ...(form.submitButtons || []).map((button) => button.name),
+      ].filter(Boolean).join(" ");
+      if (!terms.test(haystack) && forms.length >= 3) continue;
+      forms.push({
+        pageUrl: page.url,
+        evidence: "static-dom-form",
+        action: form.action || null,
+        method: form.method || "get",
+        selector: form.selector || null,
+        fields: (form.fields || []).slice(0, 12),
+        submitButtons: (form.submitButtons || []).slice(0, 4),
+        confirmations: (form.confirmations || []).slice(0, 4),
+        postcondition: form.confirmations?.length
+          ? "verify-confirmation-selector-and-text"
+          : "read-current-page-state-after-submit",
+        requiredNetworkEvent: null,
+        repeatability: null,
+      });
+      if (forms.length >= 3) return forms;
+    }
+  }
+  return forms;
+}
+
+function observedVisualAnchors(definition, pages) {
+  const anchors = [];
+  for (const page of pages) {
+    for (const anchor of page.visualAnchors || []) {
+      anchors.push({
+        pageUrl: page.url,
+        screenshot: `screenshots/${page.slug}-annotated.png`,
+        ...anchor,
+      });
+      if (anchors.length >= 8) return anchors;
+    }
+  }
+  return anchors;
 }
 
 function structureMarkdown(structure) {
@@ -719,6 +994,25 @@ function structureMarkdown(structure) {
 
 const LIST_READ_ACTION_ID = "read_current_list_page_v1";
 const FINAL_STATE_GATE_ID = "verify_final_state_v1";
+const ANSWER_EVIDENCE_ACTION_ID = "submit_answer_evidence_v1";
+
+function answerEvidenceSubmissionAction(definition) {
+  if (!["catalog-aggregation", "order-aggregation", "order-lookup"].includes(definition.id)) {
+    return null;
+  }
+  return {
+    actionId: ANSWER_EVIDENCE_ACTION_ID,
+    kind: "evidence.submit",
+    deterministic: true,
+    scope: "current-run-answer",
+    maxCallsPerPageId: 1,
+    requiredInput: {
+      requiredKeys: ["evidenceStatus", "result", "evidenceRecordIds", "filters", "ledger"],
+      evidenceStatus: "verified",
+      evidenceRecordIdsMinItems: 1,
+    },
+  };
+}
 
 function listReadSpec(structures) {
   const product = structures.find((item) => item.id === "product-list");
@@ -727,7 +1021,7 @@ function listReadSpec(structures) {
   const name = product.fields?.name;
   const price = product.fields?.price;
   const link = product.fields?.link;
-  if (!name || !price || !link) return null;
+  if (!name || !link) return null;
   return {
     actionId: LIST_READ_ACTION_ID,
     selectors: {
@@ -758,16 +1052,16 @@ function listReadTemplateFromSpec(spec) {
   const items = cards.map(card => {
     const nameNode = card.querySelector(${selector(spec.selectors.fields.name)});
     const link = card.querySelector(${selector(spec.selectors.fields.link)});
-    const priceText = card.querySelector(${selector(spec.selectors.fields.price)})?.textContent || "";
-    const priceMatch = priceText.replace(/,/g, "").match(/\\d+(?:\\.\\d{1,2})?/);
+    ${spec.selectors.fields.price ? `const priceText = card.querySelector(${selector(spec.selectors.fields.price)})?.textContent || "";
+    const priceMatch = priceText.replace(/,/g, "").match(/\\d+(?:\\.\\d{1,2})?/);` : `const priceMatch = null;`}
     return {
       name: nameNode?.textContent.trim() || "",
-      price: priceMatch ? Number(priceMatch[0]) : null,
+      ${spec.selectors.fields.price ? `price: priceMatch ? Number(priceMatch[0]) : null,` : ""}
       url: link?.href || ""
     };
   });
   if (items.length === 0) errors.push("product-list-empty-or-selector-mismatch");
-  if (items.some(item => !item.name || !item.url || item.price === null)) {
+  if (items.some(item => !item.name || !item.url${spec.selectors.fields.price ? " || item.price === null" : ""})) {
     errors.push("required-product-field-missing");
   }
   const next = ${spec.selectors.pagination.next ? `document.querySelector(${nextSelector})` : "null"};
@@ -834,35 +1128,288 @@ function listReadContract(structures) {
         "limiterOptions",
         "errors",
       ],
-      itemKeys: ["name", "price", "url"],
+      itemKeys: spec.selectors.fields.price ? ["name", "price", "url"] : ["name", "url"],
       okWhen: [
         "errors is empty",
         "itemCount equals items.length",
-        "each item has name, url, and numeric price",
+        spec.selectors.fields.price
+          ? "each item has name, url, and numeric price"
+          : "each item has name and url",
       ],
     },
+  };
+}
+
+// 页面 selector、表单和结构属于站点适配层；通用运行层只消费这份证据。
+function pageAdapterFor(item) {
+  const adapterActions = item.siteKeys?.includes("shopping")
+    ? shoppingAdapterFor(item.definition.id, item.modelContext)
+    : null;
+  const base = item.pageAdapter || {
+    structures: item.structures || [],
+    forms: item.forms || [],
+    visualAnchors: item.visualAnchors || [],
+  };
+  if (!adapterActions) return base;
+  const actions = adapterActions.actions || [adapterActions];
+  return {
+    ...base,
+    actions: [...(base.actions || []), ...actions],
+    ...(adapterActions.selectionContract
+      ? { selectionContract: adapterActions.selectionContract }
+      : {}),
   };
 }
 
 function workflowBudgets(definition, hasListAction) {
   const isCatalog = definition.id === "catalog-aggregation";
   const isSelection = definition.id === "product-selection";
+  const isSearch = definition.id === "search-discovery";
   return {
     finalStateGateRequiredBeforeSuccess: true,
+    maxConsecutiveSameAction: 2,
+    recoveryAttemptsMax: 2,
+    maxListPages: isCatalog ? 2 : null,
+    loginBlockPolicy:
+      "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
     listReadMaxCallsPerPageId: hasListAction ? 1 : null,
+    runtimeDistinctQueriesMax: isCatalog || isSelection ? 2 : isSearch ? 1 : null,
+    runtimeContractActionsMax: isCatalog ? 3 : isSelection ? 2 : isSearch ? 1 : null,
     customListEvaluateMaxCalls: hasListAction ? 0 : null,
     supplementalQueriesMax: isCatalog || isSelection ? 1 : 0,
     supplementalQueryAllowedOnlyWhen:
       isCatalog || isSelection
-        ? "zero accepted candidates satisfy target product type in the frozen primary result set"
+        ? isCatalog
+          ? "the task requires a complete aggregate or extrema and the primary storefront-search result cannot prove semantic recall closure; the supplemental query must replace only the product-type term with one direct lexical synonym while preserving brand and all hard constraints"
+          : "zero accepted candidates satisfy target product type in the frozen primary result set"
         : null,
     zeroSupplementalQueryBudgetAfterAcceptedCandidate: isSelection,
     broadCategoryDetoursForBrandFilterMax: isCatalog ? 0 : null,
   };
 }
 
+function isMutatingWorkflow(definition) {
+  return definition.mutation === true || [
+    "account-forms",
+    "cart-lists",
+    "checkout",
+    "edit-submit",
+  ].includes(definition.id);
+}
+
+function mutationPolicy(definition, forms = []) {
+  if (!isMutatingWorkflow(definition)) return null;
+  const phases = {
+    "post-create": ["open-create-form", "fill-and-verify", "submit-once", "verify-created-object"],
+    "post-reply": ["identify-target", "open-reply-form", "fill-and-verify", "submit-once", "verify-reply"],
+    vote: ["identify-target", "single-vote-action", "verify-vote-state"],
+    "user-edit": ["open-edit-form", "fill-and-verify", "submit-once", "verify-profile"],
+    subscribe: ["identify-target", "single-subscribe-action", "verify-subscribe-state"],
+    "forum-create": ["open-create-form", "fill-and-verify", "submit-once", "verify-created-forum"],
+  };
+  const expectedMutation = definition.expectedMutation || null;
+  const formEvents = forms
+    .map((form) => form.requiredNetworkEvent)
+    .filter(Boolean);
+  const derivedEvent = expectedMutation
+    ? {
+        method: expectedMutation.method,
+        urlPattern: expectedMutation.endpointPattern,
+        ...(expectedMutation.responseContent
+          ? { responseContent: expectedMutation.responseContent }
+          : {}),
+      }
+    : null;
+  return {
+    kind: "browser.mutate",
+    phases: phases[definition.id] || ["identify-target", "fill-and-verify", "submit-once", "verify-result"],
+    submitMaxCalls: 1,
+    requireExactTaskValues: true,
+    requireCurrentFormAction: true,
+    requirePostSubmitRead: true,
+    requireNetworkMutationEvent: Boolean(expectedMutation || formEvents.length),
+    networkEventExcludePathPatterns: [
+      "^/(?:login(?:_check)?|logout|registration)(?:/|$)",
+    ],
+    compoundTaskRequiresAllPhases: true,
+    requiredNetworkEvents: formEvents.length ? formEvents : derivedEvent ? [derivedEvent] : [],
+    expectedMutation,
+    contractCoverage: expectedMutation || forms.some((form) => form.requiredNetworkEvent)
+      ? "target_event_specified"
+      : "adapter_evidence_required",
+    forms,
+  };
+}
+
+function workflowTarget(definition) {
+  if (definition.target) return definition.target;
+  const targets = {
+    "product-selection": { entity: "product", identity: "task-selected-product", desiredState: "product_detail_open" },
+    navigation: { entity: "page", identity: "task-target-page", desiredState: "page_open" },
+    "category-navigation": { entity: "category_page", identity: "task-category", desiredState: "category_open" },
+    "order-aggregation": { entity: "order_set", identity: "task-order-filter", desiredState: "evidence_complete" },
+  };
+  return targets[definition.id] || { entity: definition.id, identity: "task-target", desiredState: "task-success" };
+}
+
+function workflowObservation(definition) {
+  return definition.observation || {
+    currentState: {
+      source: "browser.page",
+      required: true,
+      fields: ["url", "title", "targetObjectText"],
+    },
+  };
+}
+
+function workflowSuccessContract(definition, mutation) {
+  return {
+    requiredStatus: "SUCCESS",
+    lifecycleGate: FINAL_STATE_GATE_ID,
+    targetGate: "target_identity_verified",
+    mutationGate: mutation ? "correct_target_mutation" : "not_applicable",
+    postStateGate: "post_state_verified",
+    answerEvidenceGate: mutation ? "not_applicable" : "observe_answer_evidence_reproducibility",
+  };
+}
+
+function workflowResponseContract() {
+  return {
+    expectedStatusSource: "task.eval.AgentResponseEvaluator.expected.status",
+    onNotFound: {
+      status: "NOT_FOUND_ERROR",
+      retrievedData: null,
+      forbiddenRetrievedData: ["empty_array", "zero_array"],
+    },
+    onSuccess: {
+      status: "SUCCESS",
+      retrievedDataSchemaSource: "task.eval.AgentResponseEvaluator.results_schema",
+    },
+  };
+}
+
+function workflowAggregationPolicy(definition) {
+  if (definition.id !== "order-aggregation") return null;
+  return {
+    spent: {
+      excludeStatuses: ["Canceled", "Cancelled", "Refunded"],
+      applyStatusFilterBefore: ["group", "sum"],
+    },
+    refund: {
+      includeStatuses: ["Canceled", "Cancelled", "Refunded"],
+    },
+  };
+}
+
+function workflowIR(item, pageAdapter, listAction, submissionAction, mutation, finalStateGate) {
+  const definition = item.definition;
+  const isMutation = Boolean(mutation);
+  const target = workflowTarget(definition);
+  const observation = workflowObservation(definition);
+  return {
+    schemaVersion: 2,
+    route: {
+      workflow: definition.id,
+      intentPattern: definition.task.source,
+      siteKeys: item.siteKeys,
+      origin: item.origin,
+    },
+    target,
+    preconditions: ["site_origin_matches", "task_values_preserved"],
+    observation,
+    page: {
+      routeHints: item.routeHints || [],
+      structures: isMutation ? [] : pageAdapter.structures || [],
+      forms: isMutation ? pageAdapter.forms || [] : [],
+      visualAnchors: [],
+    },
+    ...(pageAdapter.selectionContract
+      ? { selectionContract: pageAdapter.selectionContract }
+      : {}),
+    allowedActions: [
+      ...(listAction ? [listAction.actionId] : []),
+      ...(submissionAction ? [submissionAction.actionId] : []),
+      ...(isMutation ? ["browser.mutate"] : []),
+      FINAL_STATE_GATE_ID,
+    ],
+    requiredNetworkEvents: mutation?.requiredNetworkEvents || [],
+    expectedMutation: mutation?.expectedMutation || null,
+    postStateGate: {
+      lifecycleGate: finalStateGate,
+      targetGate: target,
+    },
+    responseContract: workflowResponseContract(),
+    ...(workflowAggregationPolicy(definition)
+      ? { aggregationPolicy: workflowAggregationPolicy(definition) }
+      : {}),
+    successContract: workflowSuccessContract(definition, mutation),
+  };
+}
+
+function supportsRouteHints(workflowId) {
+  return new Set([
+    "navigation",
+    "category-navigation",
+    "catalog-aggregation",
+    "product-selection",
+    "search-discovery",
+  ]).has(workflowId);
+}
+
+function hasWorkflowCapabilityEvidence(definition, modelContext) {
+  const genericTokens = new Set(["read", "content", "aggregation", "lookup", "selection", "discovery", "navigation", "submit"]);
+  const terms = definition.id
+    .split("-")
+    .filter((token) => token.length >= 5 && !genericTokens.has(token));
+  return terms.length > 0 && modelContext.capabilities.some((capability) =>
+    terms.some((term) => String(capability.id || "").toLowerCase().includes(term)),
+  );
+}
+
 function workflowExecutionContract(item, origin, siteKey) {
-  const listAction = listReadContract(item.structures);
+  const pageAdapter = pageAdapterFor(item);
+  let listAction = item.definition.id === "category-navigation"
+    ? null
+    : listReadContract(pageAdapter.structures) || pageAdapter.actions?.[0] || null;
+  let adapterActions = item.definition.id === "category-navigation"
+    ? []
+    : Array.isArray(pageAdapter.actions) ? pageAdapter.actions : [];
+  const mutation = mutationPolicy(item.definition, pageAdapter.forms);
+  const submissionAction = answerEvidenceSubmissionAction(item.definition);
+  const program = siteKey === "shopping" &&
+    ["catalog-aggregation", "product-selection", "search-discovery", "order-aggregation", "order-lookup"].includes(item.definition.id)
+    ? shoppingCollectionAction(listAction, workflowBudgets(item.definition, Boolean(listAction)).maxListPages || 12)
+    : null;
+  if (program) {
+    adapterActions = adapterActions.map(action => action.actionId === listAction.actionId ? program : action);
+    listAction = program;
+  }
+  const readActions = adapterActions.length ? adapterActions : listAction ? [listAction] : [];
+  const contractActions = [...readActions, ...(submissionAction ? [submissionAction] : [])];
+  const finalStateGate = {
+    actionId: FINAL_STATE_GATE_ID,
+    kind: "cdp.readCurrentPageState",
+    requiredBefore: "SUCCESS",
+    requiredFields: ["url", "title", "h1OrTargetObjectText"],
+    assertions: [
+      "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+      "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+      "The current page title or target object text must prove the requested object identity.",
+      "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+      "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+      "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate.",
+    ],
+  };
+  const contractItem = { ...item, siteKeys: [siteKey], origin };
+  const contextModelProjection = {
+    capabilityIds: item.definition.capabilityIds || [],
+    surfaceIds: [...new Set((item.modelContext.bindings || []).map((binding) => binding.surface_id).filter(Boolean))],
+    actionIds: [...new Set((item.modelContext.bindings || []).flatMap((binding) => binding.platform_action_ids || []))],
+    evidenceIds: [...new Set((item.modelContext.bindings || []).flatMap((binding) => binding.evidence_ids || []))],
+    supportStatus: item.definition.capabilitySignature ? "supported" : "fallback",
+    limitations: item.modelContext.limitations || [],
+    fallbackOnUnsupported: true,
+  };
   return {
     workflow: item.definition.id,
     title: item.definition.title,
@@ -870,13 +1417,20 @@ function workflowExecutionContract(item, origin, siteKey) {
     origin,
     skillFile: `runtime-skills/${item.definition.id}/SKILL.md`,
     intentPattern: item.definition.task.source,
+    contextModel: contextModelProjection,
     enforcement: {
       mode: "runtime",
       policy:
         "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only.",
     },
+    responseContract: workflowResponseContract(),
+    ...(workflowAggregationPolicy(item.definition)
+      ? { aggregationPolicy: workflowAggregationPolicy(item.definition) }
+      : {}),
     allowedActions: [
       ...(listAction ? [listAction.actionId] : []),
+      ...adapterActions.filter((a) => a.actionId !== listAction?.actionId).map((a) => a.actionId),
+      ...(submissionAction ? [submissionAction.actionId] : []),
       FINAL_STATE_GATE_ID,
     ],
     forbiddenActions: listAction
@@ -884,7 +1438,7 @@ function workflowExecutionContract(item, origin, siteKey) {
           {
             kind: "browser.evaluate",
             when: "extracting product-list cards",
-            reason: "Use read_current_list_page_v1 exactly once per pageId.",
+            reason: `Use ${listAction.actionId} exactly once per pageId.`,
           },
           {
             kind: "incremental-card-observation",
@@ -894,19 +1448,135 @@ function workflowExecutionContract(item, origin, siteKey) {
         ]
       : [],
     budgets: workflowBudgets(item.definition, Boolean(listAction)),
-    actions: listAction ? [listAction] : [],
-    finalStateGate: {
-      actionId: FINAL_STATE_GATE_ID,
-      kind: "cdp.readCurrentPageState",
-      requiredBefore: "SUCCESS",
-      requiredFields: ["url", "title", "h1OrTargetObjectText"],
-      assertions: [
-        "The current URL must match the selected candidate URL for NAVIGATE tasks.",
-        "The current page title or target object text must prove the requested object identity.",
-        "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
-        "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate.",
-      ],
+    ...(item.definition.id === "catalog-aggregation" && !program
+      ? {
+          queryPlan: {
+            strategyByOutput: {
+              extremaOnly: {
+                strategy: "category-boundary-proof",
+                requiredOutputs: ["min", "max"],
+                directions: ["asc", "desc"],
+                accept: "first candidate in sorted order satisfying product type, brand, and all hard constraints",
+                stop: "both boundaries have accepted candidates with page and sort provenance",
+              },
+              completeCollection: {
+                strategy: "single-product-type-search-first",
+                searchPath: "/catalogsearch/result/",
+                queryParameter: "q",
+                queryValue: "one core product-type term only; do not include the brand or form a multiword query",
+                primaryStop: "if the result fits in the maximum observed page size, read it once and filter returned items by brand and all hard constraints",
+                broadResultFallback: "only when the primary result exceeds the maximum observed page size, search the exact brand and apply the narrowest category facet matching the requested product type",
+                supplementalQueriesMax: 1,
+                stop: "the primary or category-filtered result fits in the maximum observed page size and every ambiguous candidate has exact constraint evidence",
+                exactFacetMissingFallback: "stop; do not enumerate navigation menus or use Advanced Search Name",
+              },
+            },
+            actionBudget: {
+              menuEnumerationMax: 0,
+              primaryTypeQueriesMax: 1,
+              categoryFacetSelectionsMax: 3,
+              synonymQueriesMax: 1,
+              repeatedCanonicalUrlMax: 1,
+            },
+            pageSizeParameter: "product_list_limit",
+            pageSizePolicy: "put the largest observed limiter option in the canonical URL before the first contract read",
+            sortParameters: { field: "product_list_order=price", direction: "product_list_dir=asc|desc" },
+            forbidQuotedPhraseRewrite: true,
+            forbiddenDetours: [
+              "navigation-menu enumeration",
+              "reading or paginating the unfiltered brand-search collection",
+              "multiword ordinary search whose OR semantics expands the collection",
+              "Advanced Search Name for multi-term product discovery",
+              "product details unless a list title lacks an exact hard-constraint term",
+            ],
+          },
+        }
+      : {}),
+    ...(item.definition.preflightGuards?.length
+      ? { preflightGuards: item.definition.preflightGuards }
+      : {}),
+    ...(mutation ? { mutation } : {}),
+    actions: contractActions,
+    finalStateGate,
+    answerEvidenceGate: mutation
+      ? { requiredBefore: "SUCCESS", mode: "not_applicable" }
+      : {
+          requiredBefore: "SUCCESS",
+          mode: "verifyAnswerEvidence",
+          enforcement: "observe",
+          responseField: "evidence_ledger",
+          ...(submissionAction ? { submitActionId: ANSWER_EVIDENCE_ACTION_ID } : {}),
+          requiredFields: ["evidenceStatus", "result", "evidenceRecordIds", "filters", "ledger"],
+          submissionSchema: {
+            type: "object",
+            required: ["retrieved_data", "evidence_ledger"],
+            properties: {
+              retrieved_data: { description: "Benchmark answer in the task response schema." },
+              evidence_ledger: {
+                type: "object",
+                required: ["evidenceStatus", "result", "evidenceRecordIds", "filters", "ledger"],
+                properties: {
+                  evidenceStatus: { const: "verified" },
+                  result: { description: "Must equal retrieved_data after removing its outer one-item array." },
+                  evidenceRecordIds: { type: "array", minItems: 1 },
+                  filters: { type: "object" },
+                  ledger: { type: "object" },
+                },
+              },
+            },
+          },
+          failureAction: "reject_success_or_fallback",
+        },
+    ir: {
+      ...workflowIR(contractItem, pageAdapter, listAction, submissionAction, mutation, finalStateGate),
+      ...(program ? { allowedActions: [...contractActions.map(action => action.actionId), FINAL_STATE_GATE_ID] } : {}),
     },
+  };
+}
+
+export function runtimeContract(executionContract) {
+  const ir = executionContract.ir || {};
+  const action = (executionContract.actions || []).find(
+    (item) => ["browser.evaluate", "browser.runCode"].includes(item.kind),
+  );
+  return {
+    workflow: executionContract.workflow,
+    routeHints: ir.page?.routeHints || [],
+    target: ir.target || {},
+    contextModel: executionContract.contextModel || {},
+    ...(ir.selectionContract ? { selectionContract: ir.selectionContract } : {}),
+    allowedActions: executionContract.allowedActions || [],
+    stopConditions: [
+      "target identity and desired state verified",
+      "required evidence unavailable: stop without SUCCESS",
+    ],
+    answerEvidenceGate: executionContract.answerEvidenceGate || {
+      requiredBefore: "SUCCESS",
+      mode: "verifyAnswerEvidence",
+      failureAction: "reject_success_or_fallback",
+    },
+    responseContract: executionContract.responseContract || workflowResponseContract(),
+    ...(executionContract.aggregationPolicy
+      ? { aggregationPolicy: executionContract.aggregationPolicy }
+      : {}),
+    ...(action
+      ? {
+          contractAction: {
+            tool: "localweb_contract_action",
+            arguments: {
+              action_id: action.actionId,
+              workflow: executionContract.workflow,
+              route: executionContract.siteKeys?.[0],
+              contract_path: `webarena-${executionContract.siteKeys?.[0]}/references/execution-contract.json`,
+              page_id: "$CURRENT_URL",
+              ...(action.inputSchema ? { arguments: {} } : {}),
+            },
+            ...(action.inputSchema ? { inputSchema: action.inputSchema } : {}),
+            required_first_step: true,
+            call: "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。",
+          },
+        }
+      : {}),
   };
 }
 
@@ -915,6 +1585,9 @@ function executionContractMarkdownLink(workflowId) {
 }
 
 function stateVariables(definition) {
+  if (Array.isArray(definition.stateVars) && definition.stateVars.length) {
+    return definition.stateVars;
+  }
   if (definition.id === "product-selection") {
     return [
       "`comparator`：任务要求的比较字段、方向和并列规则",
@@ -927,6 +1600,7 @@ function stateVariables(definition) {
   }
   if (definition.id === "catalog-aggregation") {
     return [
+      "`query_ledger`：记录本任务选择的证明策略；边界证明保存升序/降序类别 URL 与边界候选，完整集合保存主查询、同义词查询、分页闭合状态和命中数量",
       "`visited_page_ids`：已处理列表页 URL 集合",
       "`reported_total`：页面声明的结果总数",
       "`seen_product_urls`：已读取商品 URL 集合",
@@ -953,9 +1627,81 @@ function stateVariables(definition) {
   ];
 }
 
-function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
+export function executableSkillMarkdown(contract, siteName) {
+  const program = contract.actions.find(action => action.inputSchema);
+  return [
+    "---", `name: ${slugForSkill(siteName)}-${contract.workflow}`,
+    "description: 参数化集合读取程序；自动分页、去重与完整性验证。", "---", "",
+    `# ${contract.title}`, "",
+    `调用 localweb_contract_action：action_id=${program.actionId}，workflow=${contract.workflow}，route=shopping，contract_path=webarena-shopping/references/execution-contract.json，page_id=当前 URL，arguments=业务参数对象。`,
+    `参数：${JSON.stringify(program.inputSchema)}`, "",
+    program.sourceActionId === "read_order_history_page_v1"
+      ? "先使用已有认证会话进入 /sales/order/history/ 第一页。status 仅用于明确的精确状态；日期上下界均包含当天，只有任务明确指定时才传入。程序返回过滤后的 orders、每条来源 pageId 和整集合扫描证明。"
+      : "先进入目标分类或站内搜索第一页；普通搜索先用一个核心产品类型词。程序按当前页面已观察到的最大分页量读取并沿 Next 自动翻页，返回 items 和来源。nameContains 仅用于确定的字面子串过滤；存在同义词、类别或属性歧义时省略，读取后判断，必要时查详情。",
+    "程序通过 Playwright 页面导航和实时 DOM 读取执行，结束时浏览器位于最后读取页；不使用 HTTP、文件或数据库捷径。complete 只证明该查询/分类分页闭合，不证明自然语言查询召回完整，也不证明所有业务条件已满足。",
+    `一次调用预留 maxPages 页预算（默认 ${program.inputSchema.properties.maxPages.default}）；需要两次查询时先显式分配页预算，不能靠多次调用绕过工作流总预算。不要在程序外重写分页、反复读取同一集合或重新抄写抽取代码。`,
+    ...(contract.ir.selectionContract ? [`选择规则：${JSON.stringify(contract.ir.selectionContract)}`] : []),
+    ...contract.actions.filter(action => action.sourceActionId !== program.sourceActionId && action.actionId !== program.actionId && action.kind === "browser.evaluate").map(action => `需要商品行金额/品类证据时打开匹配订单详情，调用 action_id=${action.actionId}；订单总金额不能代替商品行 subtotal。`),
+    "ok=false 或 complete=false 时不得把部分记录当完整答案。根据 errors 修正前置页面或报告缺失证据；工具预算拒绝后停止浏览，不能用猜测补齐数据。",
+    "保留任务原有的状态与输出 schema；NOT_FOUND_ERROR 的 retrieved_data 为 null。NAVIGATE 必须实际打开选中的目标 URL，并读取最终状态。",
+    ...(contract.answerEvidenceGate.submitActionId ? [`RETRIEVE 回答前调用 action_id=${contract.answerEvidenceGate.submitActionId}，提交 evidence_ledger={evidenceStatus:'verified',result:最终答案,evidenceRecordIds:[记录ID],filters:{实际条件},ledger:{records:[带 pageId 的证据]}}；只有已验证集合及业务筛选能支持该答案时才提交。`] : []),
+    "最后用 snapshot/evaluate 读取当前页面状态；不要把证据台账添加到任务未要求的答案字段。", "",
+  ].join("\n");
+}
+
+function runtimeSkillMarkdown(item, siteName, origin, routeHints, minimalRuntime = false) {
   const { definition, modelContext, locators } = item;
-  const listReadTemplate = batchReadTemplate(item.structures);
+  const pageAdapter = pageAdapterFor(item);
+  if (item.siteKeys?.includes("shopping")) {
+    const contract = workflowExecutionContract(item, origin, "shopping");
+    const program = contract.actions.find(action => action.inputSchema);
+    if (program) return executableSkillMarkdown(contract, siteName);
+  }
+  if (minimalRuntime) {
+    const executionContract = workflowExecutionContract(
+      { ...item, siteKeys: item.siteKeys || [] },
+      origin,
+      item.siteKeys?.[0] || slugForSkill(siteName),
+    );
+    const action = executionContract.actions.find((entry) => entry.kind === "browser.evaluate");
+    const targetRoute = definition.id.startsWith("order-") ? "/sales/order/history/" : null;
+    const lines = [
+      "---",
+      `name: ${slugForSkill(siteName)}-${definition.id}`,
+      "description: Evidence-backed minimal runtime contract.",
+      "---",
+      "",
+      `workflow: ${definition.id}`,
+      `site: ${origin}`,
+      `target: ${executionContract.ir.target.entity}/${executionContract.ir.target.desiredState}`,
+      "",
+      "- Preserve only constraints explicitly present in the task.",
+      targetRoute ? `- If authentication is required, sign in with configured credentials, then navigate to \`${targetRoute}\`.` : "- Navigate only through the verified route for this workflow.",
+    ];
+    if (action) {
+      lines.push(
+        `- On each target page, call \`localweb_contract_action\` once: action_id=\`${action.actionId}\`, route=\`${executionContract.siteKeys[0]}\`, contract_path=\`webarena-${executionContract.siteKeys[0]}/references/execution-contract.json\`, page_id=current URL.`,
+        "- Use only its verified evidence; do not re-extract the list with snapshot or evaluate. Follow nextHref only while task constraints still need evidence.",
+      );
+    }
+    if (executionContract.ir.selectionContract) {
+      lines.push(
+        `- Selection contract: ${JSON.stringify(executionContract.ir.selectionContract)}`,
+        "- Open matching order details and apply the exact date, primary product category, status, and amount-field rules before aggregating; do not sum the whole order subtotal when unrelated items are present.",
+      );
+    }
+    lines.push(
+      "- Before SUCCESS, read final URL/title and ensure the answer is supported by verified evidence. If evidence is incomplete, fall back to ordinary browser reasoning rather than guessing.",
+      "",
+    );
+    return lines.join("\n");
+  }
+  const compactReadWorkflow =
+    !isMutatingWorkflow(definition) &&
+    !["catalog-aggregation", "order-aggregation", "order-lookup", "product-selection"].includes(
+      definition.id,
+    );
+  const listReadTemplate = batchReadTemplate(pageAdapter.structures);
   const lines = [
     "---",
     `name: ${slugForSkill(siteName)}-${definition.id}`,
@@ -990,8 +1736,16 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
     );
     if (definition.id === "catalog-aggregation") {
       lines.push(
-        "- 首次成功批量读取后冻结该搜索结果集；品牌与产品类型直接在返回的 `items` 上验收，不得为了寻找侧栏品牌筛选器而切换到宽泛分类页。",
-        "- 只有冻结结果集中零个候选满足产品类型时才能使用一次补充查询；不能因为候选不够多而改写查询或并行探索分类页。",
+        "- 强制先按输出分流：只有 `min/max` 时执行 `CATEGORY_ASC_BOUNDARY → CATEGORY_DESC_BOUNDARY → SUBMIT_EVIDENCE_LEDGER`；要求完整名称/型号时执行 `SINGLE_PRODUCT_TYPE_SEARCH → MAX_PAGE_SIZE → READ_COLLECTION → FILTER_BRAND_AND_CONSTRAINTS → VERIFY_AMBIGUOUS_CANDIDATES → SUBMIT_EVIDENCE_LEDGER`。",
+        "- `min/max` 分支从已观察到的分类路径中选择语义最精确的一条，直接构造带 `product_list_limit=<最大值>&product_list_order=price&product_list_dir=asc|desc` 的两个 URL。按排序从第一页开始，每个方向的第一个合格候选就是该边界；不得先跑宽泛站内搜索。",
+        "- 完整列表分支先只用一个核心产品类型词做普通搜索，不得加入品牌、属性或第二个产品词（该站点的普通多词搜索会按 OR 扩张结果），也不得使用 Advanced Search Name。",
+        "- 第一个结果页先读取 toolbar 总数和最大分页量；若总数不超过最大分页量，直接用规范 URL 一次批量读取，再在返回的 `items` 上按品牌与全部硬约束筛选，不得探索分类菜单。",
+        "- 只有单核心产品词结果确实超过最大分页量时，才允许改用品牌搜索并向下选择最多三次精确产品分类 facet；仍无法得到可闭合集合就停止，不得枚举菜单、改写多词查询或使用 Advanced Search。",
+        "- 到达每个规范列表 URL 后的第一个读取动作必须是 `localweb_contract_action`；不得插入菜单枚举、自定义列表 evaluate，或重复操作排序/分页量下拉框。",
+        "- 品牌与产品类型直接在返回的 `items` 上验收；每个入选标题必须同时满足任务中的品牌和产品类型词，不能只满足其中一个。标题缺少任务中的精确属性词时才打开详情，并且必须找到该属性词的明确证据才能入选。`wireless` 不能替代 `Bluetooth`，找不到 Bluetooth 证据就拒绝候选。",
+        "- `names` 必须逐字符使用列表页返回的 `item.name`，不得手工改写、补全或修正标点；最终数组只能来自 `accepted_candidates`，不能混入未通过全部硬约束的搜索结果。",
+        "- 同一规范 URL 只允许一次列表读取；禁止枚举导航菜单，禁止自定义 browser evaluate 抽取分类或商品卡片。最多读取 12 个分页；超过上限仍无法证明候选集合完整时，停止并返回 NOT_FOUND_ERROR，不得继续循环消耗步骤。",
+        "- **budget 耗尽停止（机器状态）**：本规则仅在收到 `contract_action_rejected: workflow browser.evaluate budget exceeded` 或 `contract_action_rejected: workflow contract-action budget exceeded` 信号后触发；在收到该信号之前，必须正常执行工具调用，不得跳过浏览步骤。触发后：立即停止所有浏览器探索（navigate/snapshot/find/click 均不得再发起）；由于 evidence_ledger 提交需要额外的 contract_action 调用而预算已耗尽，必须直接返回 `NOT_FOUND_ERROR`（retrieved_data: null），不得声明 SUCCESS。禁止在 budget 耗尽后继续导航或试图读取更多商品页。禁止凭记忆或推断填写 retrieved_data，所有数据必须来自本次运行实际观测。基础设施错误（`contract_action_failed: localweb MCP is unavailable` 等）不触发此规则，允许重试一次。",
       );
     }
     if (definition.id === "product-selection") {
@@ -1001,11 +1755,61 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
       );
     }
   }
-  lines.push(
-    "",
-    "## 循环动作",
-    "",
-  );
+  if (!isMutatingWorkflow(definition) && ["catalog-aggregation", "order-aggregation", "order-lookup"].includes(definition.id)) {
+    lines.push(
+      "",
+      "## 答案证据提交",
+      "",
+      `- 最终回答前必须调用一次 \`localweb_contract_action\`：\`action_id=${ANSWER_EVIDENCE_ACTION_ID}\`、\`workflow=${definition.id}\`、\`route=${item.siteKeys?.[0] || slugForSkill(siteName)}\`、\`contract_path=webarena-${item.siteKeys?.[0] || slugForSkill(siteName)}/references/execution-contract.json\`、\`page_id=当前 URL\`，并通过 \`evidence_ledger\` 参数提交台账。`,
+      "- `evidence_ledger.evidenceStatus` 仅在所有查询/分页或排序边界证明完成、候选验收完成且结果可由同一台账重算时写 `verified`；同时包含 `result`、非空 `evidenceRecordIds`、实际 `filters` 和含页面来源的 `ledger`。否则不得调用提交动作或声明 SUCCESS。",
+      '- 参数形状固定为 `evidence_ledger={"evidenceStatus":"verified","result":<与最终答案相同的值或对象>,"evidenceRecordIds":["记录ID"],"filters":{"字段":"实际条件"},"ledger":{"records":[{"recordId":"记录ID","pageId":"来源URL","value":"证据值"}]}}`；`filters` 和 `ledger` 必须是对象，不能写成字符串或数组。',
+      "- 提交动作返回 `evidenceLedger` 后，最终 JSON 只保留 benchmark 要求的字段；不要把审计台账塞进 `retrieved_data` 或增加任务未要求的答案字段。",
+    );
+  }
+  if (isMutatingWorkflow(definition)) {
+    lines.push(
+      "",
+      "## 写操作执行契约",
+      "",
+      "- 按机器契约中的 phases 顺序执行；任何阶段失败都只能重新读取当前状态后恢复，不能跳阶段或改写任务值。",
+      "- 从当前 DOM 读取 form action、目标对象身份和字段；每个字段与任务原文完全一致后才允许提交，提交/投票/订阅动作最多一次。",
+      "- 若机器契约声明 requiredNetworkEvents，写操作完成必须有匹配的非登录 POST 事件；仅靠页面看起来正确不能声明 SUCCESS。",
+      "- 提交后立即读取当前页面或目标对象，核对 URL、标题/文本、状态标记或响应确认；缺少该证据时保持未完成。",
+      "- 复合任务必须逐阶段验证；创建后再评论/回复时，先确认新对象身份，再定位该对象的评论表单。",
+    );
+    if (pageAdapter.forms?.length) {
+      lines.push("", "## 已验证表单动作", "");
+      pageAdapter.forms.forEach((form) => {
+        lines.push(
+          `- 页面 \`${form.pageUrl}\`：${form.method.toUpperCase()} \`${form.action || "(current URL)"}\`，表单 \`${form.selector || "(unresolved)"}\``,
+          `  字段：${form.fields.map((field) => `${field.name || field.label || "?"}(${field.type || "text"})`).join("、") || "未识别"}`,
+          `  提交：${form.submitButtons.map((button) => button.name || button.selector || "?").join("、") || "未识别"}；证据=${form.evidence}；提交后=${form.postcondition}`,
+        );
+        if (form.requiredNetworkEvent) {
+          lines.push(
+            `  必须出现网络事件：${form.requiredNetworkEvent.method || "POST"} \`${form.requiredNetworkEvent.urlPattern || form.requiredNetworkEvent.url || "未指定"}\``,
+          );
+        }
+        if (form.repeatability) {
+          lines.push(`  可重复测试：${form.repeatability}`);
+        }
+      });
+    }
+  }
+  if (!compactReadWorkflow && pageAdapter.visualAnchors?.length) {
+    lines.push(
+      "",
+      "## 视觉备用锚点",
+      "",
+      "- DOM/role selector 是主路径；仅当目标控件无稳定 selector 或多个控件歧义时，才查看对应 annotated screenshot 的区域。视觉确认后必须重新读取 DOM，再执行动作。",
+    );
+    pageAdapter.visualAnchors.slice(0, 6).forEach((anchor) =>
+      lines.push(
+        `- \`${anchor.pageUrl}\`：${anchor.role}「${anchor.name || "无文字控件"}」${anchor.context ? `（${anchor.context}）` : ""}；截图 \`${anchor.screenshot}\`，区域 ${JSON.stringify(anchor.box)}`,
+      ),
+    );
+  }
+  lines.push("", "## 循环动作", "");
   definition.steps.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
   if (definition.checks?.length) {
     lines.push("", "## 停止条件与必检项", "");
@@ -1026,7 +1830,7 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
       lines.push(`- ${item.label}：\`${item.path}\``),
     );
   }
-  if (item.structures.length) {
+  if (pageAdapter.structures.length) {
     lines.push(
       "",
       "## 已验证批量读取结构",
@@ -1034,7 +1838,7 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
       "这些 selector 来自已抓取页面；先在实时页面确认存在，再在一次 evaluate 中按卡片作用域提取字段。",
       "",
     );
-    item.structures.forEach((structure) =>
+    pageAdapter.structures.forEach((structure) =>
       lines.push(structureMarkdown(structure)),
     );
     if (listReadTemplate) {
@@ -1042,7 +1846,7 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
         "",
         "## 单次读取模板",
         "",
-        "在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。",
+        "在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。**必须原样执行此模板，不得修改字段名或省略 `pageId`/`actionId` 等任何字段。**",
         "",
         "```js",
         listReadTemplate,
@@ -1050,7 +1854,7 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
       );
     }
   }
-  const modelLocators = modelContext.locators.slice(0, 7);
+  const modelLocators = modelContext.locators.slice(0, compactReadWorkflow ? 2 : 4);
   if (modelLocators.length) {
     lines.push("", "## 已验证结构", "");
     modelLocators.forEach((item) =>
@@ -1059,17 +1863,15 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints) {
   } else if (locators.length) {
     lines.push("", "## 操作锚点", "");
     locators.slice(0, 3).forEach((item) =>
-      lines.push(`- ${item.label}：\`${item.locator}\``),
+      lines.push(`- ${item.label}：\`${item.locator}\`（confidence=${item.confidence}，evidence=${item.evidence.join(",") || "none"}）`),
     );
   }
   lines.push(
     "",
     "## 最终状态闸门",
     "",
-    "- 成功前的最后一次浏览器调用必须读取实时 `URL + title + H1/目标对象`；最终答案只能描述这次读取到的当前状态。",
-    "- NAVIGATE 任务中，当前 URL 必须精确等于选中的候选 URL，并逐项保留任务要求的小数边界与 query 参数；不允许用语义近似页面代替。",
-    "- RETRIEVE 任务中，先按要求校验返回值的类型、空值协议和字段集合；浏览器中断或证据不足时不得返回 SUCCESS。",
-    "- 如果口头选中的候选与当前 URL 不一致，必须导航到候选并重新执行本闸门；否则判定失败。",
+    "- 报告 SUCCESS 前，最后一次浏览器工具调用必须是 `localweb_browser_snapshot` 或 `localweb_browser_evaluate`；navigate/click 后必须再读取当前状态。",
+    "- 按前置 Workflow IR 的 `postStateGate` 完成 URL、标题/目标对象和结果证据校验；闸门通过前不得报告 SUCCESS。",
     "",
     "## 完成证明",
     "",
@@ -1233,23 +2035,35 @@ function handbookMarkdown(
   siteName,
   origin,
   workflows,
-  coverageTaskCount,
-  focusTaskCount,
-  typeCounts,
+  contextModel,
+  artifactRoot,
 ) {
+  const contextRoot = contextModel?.source || null;
+  const pathLine = (label, file) =>
+    file ? `- ${label}：\`${file}\`` : null;
   const lines = [
     `# ${siteName} 任务手册`,
     "",
     `站点：\`${origin}\``,
     "",
-    `覆盖语料：${coverageTaskCount} 条${
-      coverageTaskCount
-        ? `（${Object.entries(typeCounts)
-            .map(([type, count]) => `${type} ${count}`)
-            .join("、")}）`
-        : "（未提供任务集，以下路由仅来自页面证据）"
-    }`,
-    `本轮重点任务：${focusTaskCount} 条。重点任务只影响抓取优先级和路径提示，不删除覆盖语料中的工作流。`,
+    "本手册描述由当前 Context Model 支持的能力和运行入口，不以旧任务语料条数表示能力覆盖率。",
+    "",
+    "## 事实来源与运行产物",
+    "",
+    ...[
+      pathLine("原始 trace", contextRoot && `${contextRoot}/platform-core/dev`),
+      pathLine("整理后的证据", contextRoot && `${contextRoot}/platform-core/reviewed`),
+      pathLine("Platform Core", contextRoot && `${contextRoot}/platform-core/surfaces`),
+      pathLine("Business Core", contextRoot && `${contextRoot}/business-core`),
+      pathLine("能力绑定", contextRoot && `${contextRoot}/context-model/capability-bindings.json`),
+      pathLine("Context Model 校验", contextRoot && `${contextRoot}/context-model/validation-report.json`),
+      pathLine("Context Model 冻结清单", contextRoot && `${contextRoot}/context-model/context-model.freeze.json`),
+      pathLine("能力路由", artifactRoot && `${artifactRoot}/router.json`),
+      pathLine("运行契约目录", artifactRoot && `${artifactRoot}/runtime-contracts`),
+      pathLine("机器执行契约", artifactRoot && `${artifactRoot}/references/execution-contract.json`),
+    ].filter(Boolean),
+    "",
+    "在 `baselineB_skill_routed` 条件下，每次只把命中的一个 `runtime-skills/<route>/SKILL.md` 作为 Skill 文本注入 Agent。Runner 另行读取 `execution-contract.json` 中命中工作流的切片，把 preflight guards、Workflow IR 和 contract-action bridge 指令写入 prompt，并用该切片执行机器审计；不会把整个契约文件、顶层 `SKILL.md` 或全部 runtime Skills 原样注入。原始 trace 只用于审计、定位证据缺口和重建 Context Model，不应默认整批注入 Agent。",
     "",
     "## 使用方法",
     "",
@@ -1259,25 +2073,31 @@ function handbookMarkdown(
     "",
     "## 工作流路由",
     "",
-    "| 任务线索 | 工作流 | 覆盖 / 重点 | 页面证据 |",
-    "|---|---|---:|---|",
+    "| 任务线索 | 工作流 | Context Model 能力 | 注入方式 | 证据状态 |",
+    "|---|---|---|---|---|",
   ];
   for (const item of workflows) {
+    const capabilities = item.definition.capabilityIds?.length
+      ? item.definition.capabilityIds.map((id) => `\`${id}\``).join("、")
+      : "—";
+    const supported = Boolean(item.definition.capabilitySignature);
     lines.push(
-      `| ${item.definition.keywords} | [${item.definition.title}](workflows/${item.definition.id}.md) | ${item.tasks.length} / ${item.focusTasks.length} | ${item.covered ? "关键步骤有" : item.locators.length ? "仅入口" : "缺少"} |`,
+      `| ${item.definition.keywords} | [${item.definition.title}](workflows/${item.definition.id}.md) | ${capabilities} | \`${supported ? item.definition.runtimeMode || "workflow_skill" : "baseline_fallback"}\` | ${supported ? "supported" : "fallback"} |`,
     );
   }
-  const gaps = workflows.filter((item) => item.tasks.length && !item.covered);
-  lines.push("", "## 覆盖缺口", "");
-  if (gaps.length) {
-    for (const item of gaps) {
-      lines.push(
-        `- ${item.definition.title}：有 ${item.tasks.length} 条任务，但当前抓取尚未覆盖关键步骤。`,
-      );
+  const limitations = contextModel?.unresolved || [];
+  lines.push("", "## 已知证据边界", "");
+  if (limitations.length) {
+    for (const item of limitations) {
+      lines.push(`- \`${item.id}\`（${item.status}）：${item.impact}`);
     }
   } else {
-    lines.push("- 当前任务工作流均有至少一条页面 locator 证据。");
+    lines.push("- 当前 Context Model 未声明未解决项；这不等于全站能力已经覆盖。 ");
   }
+  lines.push(
+    "",
+    "没有 capability binding 或超出上述证据边界的任务必须回退 baseline，不得把通用工作流或旧任务语料当成已验证能力。",
+  );
   return `${lines.join("\n")}\n`;
 }
 
@@ -1354,21 +2174,24 @@ export function buildWorkflowHandbook({
   coverageTasks = tasks || [],
   focusTasks = tasks || coverageTasks,
   contextModel = null,
+  artifactRoot = null,
+  workflowDefs = WORKFLOWS,
+  evidenceOnly = false,
 }) {
   const coverageGrouped = new Map(
-    WORKFLOWS.map((workflow) => [workflow.id, []]),
+    workflowDefs.map((workflow) => [workflow.id, []]),
   );
-  const focusGrouped = new Map(WORKFLOWS.map((workflow) => [workflow.id, []]));
+  const focusGrouped = new Map(workflowDefs.map((workflow) => [workflow.id, []]));
   for (const task of coverageTasks) {
-    coverageGrouped.get(classifyTask(task).id).push(task);
+    coverageGrouped.get(classifyTask(task, workflowDefs).id).push(task);
   }
-  for (const task of focusTasks) focusGrouped.get(classifyTask(task).id).push(task);
+  for (const task of focusTasks) focusGrouped.get(classifyTask(task, workflowDefs).id).push(task);
   const typeCounts = {};
   for (const task of coverageTasks) {
     const type = taskType(task);
     typeCounts[type] = (typeCounts[type] || 0) + 1;
   }
-  const workflows = WORKFLOWS.map((definition) => {
+  const workflows = workflowDefs.map((definition) => {
     const workflowTasks = coverageGrouped.get(definition.id);
     const workflowFocusTasks = focusGrouped.get(definition.id);
     const locators = rankLocators(definition, pages, origin);
@@ -1385,20 +2208,33 @@ export function buildWorkflowHandbook({
     const modelContext = contextForWorkflow(
       contextModel,
       definition.modelTerms || [],
+      WORKFLOW_CAPABILITY_IDS[definition.id] || [],
     );
-    const structures = observedStructures(definition, pages);
-    const routeHints = taskDrivenRouteHints(
-      workflowFocusTasks,
-      pages,
-      origin,
-    );
-    return {
+    const publishedDefinition = capabilityBackedDefinition(
       definition,
+      contextModel,
+      modelContext,
+    );
+    const pageAdapter = {
+      structures: observedStructures(definition, pages),
+      forms: observedForms(definition, pages),
+      visualAnchors: observedVisualAnchors(definition, pages),
+    };
+    const routeHints = supportsRouteHints(definition.id)
+      ? taskDrivenRouteHints(workflowFocusTasks, pages, origin)
+      : [];
+    return {
+      definition: publishedDefinition,
+      siteKeys: siteKey ? [siteKey] : [],
       tasks: workflowTasks,
       focusTasks: workflowFocusTasks,
       locators,
       modelContext,
-      structures,
+      pageAdapter,
+      // Compatibility aliases for callers that inspect the in-memory result.
+      structures: pageAdapter.structures,
+      forms: pageAdapter.forms,
+      visualAnchors: pageAdapter.visualAnchors,
       routeHints,
       covered: Boolean(
         covered ||
@@ -1409,10 +2245,15 @@ export function buildWorkflowHandbook({
     };
   }).filter(
     (item) => {
+      if (evidenceOnly) {
+        return hasWorkflowCapabilityEvidence(item.definition, item.modelContext);
+      }
       if (item.definition.fallback || item.definition.kind === "core") {
         return true;
       }
-      if (coverageTasks.length) return item.tasks.length > 0;
+      if (coverageTasks.length) {
+        return item.tasks.length > 0 || Boolean(item.definition.capabilitySignature);
+      }
       return (
         (item.locators.length > 0 || item.modelContext.locators.length > 0) &&
         item.covered
@@ -1440,11 +2281,30 @@ export function buildWorkflowHandbook({
         siteName,
         origin,
         item.routeHints,
+        evidenceOnly,
       ),
     ]),
   );
+  const sequenceDefs = workflowDefs.flatMap((definition) =>
+    (definition.sequences || []).map((sequence) => ({
+      ...sequence,
+      siteKey: siteKey || slugForSkill(siteName),
+      origin,
+    })),
+  );
   const router = {
-    schema_version: 1,
+    schema_version: 2,
+    routing_mode: "capability_signature_v2",
+    requirements_schema: {
+      entity: "string|null",
+      operation: ["lookup", "read", "aggregate", "mutate"],
+      selection: "{field,operator,value?}[]",
+      outputs: "{field,type}[]",
+      amount_semantics: "object|null",
+      requires_detail: "boolean",
+      unknown_requirements: "string[]",
+    },
+    fallback_route: workflows.find((item) => item.definition.fallback)?.definition.id || "other",
     router: `${skillName}-router`,
     site: {
       key: siteKey || slugForSkill(siteName),
@@ -1460,9 +2320,39 @@ export function buildWorkflowHandbook({
       fallback: Boolean(item.definition.fallback),
       intent_pattern: item.definition.task.source,
       skill_file: `runtime-skills/${item.definition.id}/SKILL.md`,
+      runtime_contract_file: `runtime-contracts/${item.definition.id}.json`,
+      runtime_mode: item.definition.runtimeMode || "workflow_skill",
       contract_file: "references/execution-contract.json",
       contract_workflow: item.definition.id,
       reason: item.definition.title,
+      capability_ids: item.definition.capabilityIds || [],
+      evidence_ids: [...new Set((item.modelContext.bindings || []).flatMap((binding) => binding.evidence_ids || []))],
+      context_support: item.definition.capabilitySignature ? "supported" : "fallback",
+      capability_signature: item.definition.capabilitySignature || null,
+    })),
+    capabilities: workflows
+      .filter((item) => item.definition.capabilitySignature)
+      .map((item, index) => ({
+        route: item.definition.id,
+        priority: 100 - index,
+        fallback: false,
+        capability_ids: item.definition.capabilityIds || [],
+        evidence_ids: [...new Set((item.modelContext.bindings || []).flatMap((binding) => binding.evidence_ids || []))],
+        signature: item.definition.capabilitySignature,
+      })),
+    sequences: sequenceDefs.map((sequence, index) => ({
+      site_keys: [sequence.siteKey],
+      origin_pattern: `^${origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:/|$)`,
+      route: sequence.id,
+      priority: index,
+      intent_pattern: sequence.task.source,
+      workflows: sequence.workflows,
+      skill_files: sequence.workflows.map((workflow) =>
+        `runtime-skills/${workflow}/SKILL.md`,
+      ),
+      contract_file: "references/execution-contract.json",
+      contract_workflows: sequence.workflows,
+      reason: sequence.title,
     })),
   };
   const contractSiteKey = siteKey || slugForSkill(siteName);
@@ -1481,7 +2371,32 @@ export function buildWorkflowHandbook({
         workflowExecutionContract(item, origin, contractSiteKey),
       ]),
     ),
+    sequences: Object.fromEntries(
+      sequenceDefs.map((sequence) => [
+        sequence.id,
+        {
+          workflow: sequence.id,
+          title: sequence.title,
+          siteKeys: [sequence.siteKey],
+          origin: sequence.origin,
+          stages: sequence.workflows.map((workflow) =>
+            (() => {
+              const stage = workflows.find((item) => item.definition.id === workflow);
+              return stage
+                ? workflowExecutionContract(stage, origin, contractSiteKey)
+                : { workflow, unavailable: true };
+            })(),
+          ),
+        },
+      ]),
+    ),
   };
+  const runtimeContracts = Object.fromEntries(
+    Object.entries(executionContract.workflows).map(([workflow, contract]) => [
+      `${workflow}.json`,
+      runtimeContract(contract),
+    ]),
+  );
   const coverage = {
     schemaVersion: 2,
     generatedAt: new Date().toISOString(),
@@ -1530,6 +2445,13 @@ export function buildWorkflowHandbook({
             action.primary.selector?.includes(":nth-of-type("),
         ).length,
     },
+    routerSemantics: {
+      mode: "capability_signature_v2",
+      parsedRequirementExamples: focusTasks.slice(0, 20).map((task) => ({
+        taskId: task.task_id ?? task.id ?? null,
+        requirements: parseTaskRequirements(task.intent || task.task || ""),
+      })),
+    },
     workflows: workflows.map((item) => ({
       id: item.definition.id,
       title: item.definition.title,
@@ -1547,7 +2469,7 @@ export function buildWorkflowHandbook({
         item.modelContext.surfaces.length +
         item.modelContext.actions.length,
       contextLocators: item.modelContext.locators.length,
-      observedStructures: item.structures.length,
+      observedStructures: pageAdapterFor(item).structures.length,
       contractActions:
         executionContract.workflows[item.definition.id]?.actions.length || 0,
       routeHints: item.routeHints.length,
@@ -1559,12 +2481,12 @@ export function buildWorkflowHandbook({
       siteName,
       origin,
       workflows,
-      coverageTasks.length,
-      focusTasks.length,
-      typeCounts,
+      contextModel,
+      artifactRoot,
     ),
     workflows: files,
     runtimeSkills,
+    runtimeContracts,
     router,
     executionContract,
     contextModel: contextModelMarkdown(contextModel),

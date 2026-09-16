@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-cart-checkout",
+  "states": [
+    {"id": "cart-nonempty", "observation_ids": ["cart-has-item"]},
+    {"id": "checkout-payment-stage", "observation_ids": ["checkout-ready-for-payment"]},
+    {"id": "order-confirmed", "observation_ids": ["checkout-order-confirmed"]}
+  ],
+  "transitions": [
+    {"from_state": "cart-nonempty", "action_id": "cart-add-product", "to_state": "cart-nonempty", "stop_conditions": ["The selected product is represented in the cart."], "failure_conditions": ["The cart does not reflect the requested addition."], "unknown_conditions": ["Empty-cart recovery was not independently exercised."], "pagination_or_sort_state": ["No collection ordering is required for this transition."]},
+    {"from_state": "cart-nonempty", "action_id": "checkout-prepare", "to_state": "checkout-payment-stage", "stop_conditions": ["Required checkout information is accepted and payment stage is established."], "failure_conditions": ["Required information is rejected or checkout cannot advance."], "unknown_conditions": ["Payment rejection was not independently exercised."], "pagination_or_sort_state": ["No collection ordering applies during checkout."]},
+    {"from_state": "checkout-payment-stage", "action_id": "checkout-submit-order", "to_state": "order-confirmed", "stop_conditions": ["A confirmation state proves that the order was established."], "failure_conditions": ["Submission fails or confirmation cannot be established."], "unknown_conditions": ["Only the recorded supported payment path is evidenced."], "pagination_or_sort_state": ["No collection ordering applies to order submission."]}
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1",
+  "created_at": "2026-08-28T05:39:50.844774+00:00",
+  "status": "passed",
+  "checks": [
+    {
+      "script": "validate_platform_core.py",
+      "returncode": 0,
+      "output": "ok"
+    },
+    {
+      "script": "validate_business_core.py",
+      "returncode": 0,
+      "output": "ok"
+    },
+    {
+      "script": "validate_capability_bindings.py",
+      "returncode": 0,
+      "output": "ok"
+    }
+  ],
+  "unresolved_items": [
+    {
+      "id": "empty-search-state",
+      "status": "not_evidenced",
+      "impact": "No reusable empty-result behavior is asserted."
+    },
+    {
+      "id": "empty-cart-state",
+      "status": "not_evidenced",
+      "impact": "Cart capability is limited to the evidenced nonempty state."
+    },
+    {
+      "id": "not-found-content-state",
+      "status": "not_evidenced",
+      "impact": "No general not-found handling policy is asserted."
+    },
+    {
+      "id": "large-order-history-pagination",
+      "status": "partially_evidenced",
+      "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+    }
+  ]
+}

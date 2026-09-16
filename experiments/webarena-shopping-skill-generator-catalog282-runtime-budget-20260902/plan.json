@@ -1,0 +1,29 @@
+{
+  "experiment": "webarena-shopping-skill-generator-catalog282-runtime-budget-20260902-v3",
+  "task_ids": [282],
+  "group": "baselineB_skill_routed",
+  "agent_id": "阿器",
+  "contract_audit_mode": "enforce",
+  "runner_timeout_seconds": 0,
+  "purpose": "Verify that execution-contract query and action budgets are enforced by the ArtifactTrace runtime and prevent unbounded catalog pagination.",
+  "success_criteria": {
+    "runtime_contract_list_reads_max": 2,
+    "runtime_distinct_queries_max": 2,
+    "runtime_contract_actions_max": 3,
+    "runner_timeout": false,
+    "historical_results_overwritten": false
+  },
+  "frozen_inputs": {
+    "artifacttrace_head": "736596e425b60bf5de15864790d30a84e89863ac",
+    "tlaic_main": "db1211f77d7e50e0370bf40a19f5aaec6c7db263",
+    "contract_action_sha256": "97597cf731f4e65677196d32989c0a0170b7c32d6c1476f75fb3f5d1fa4e84b3",
+    "runner_sha256": "f5d126660a044477cbde574058d9d85a4ad47a9b48cfe0272f9305fe0d6723eb",
+    "execution_contract_sha256": "925693bf9c1452635ffb6265a8f6ea0ffc082f3cd39dff71cb8bbb54cc3e4a9b",
+    "catalog_skill_sha256": "3a3661ee4865e948ea2281737f29ba67334a822e274ed13111f2eca17645cccd"
+  },
+  "server_output_root": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-runtime-budget-20260902-v3",
+  "excluded_attempts": {
+    "v1": "infrastructure-only: AT was restarted without ARTIFACTTRACE_CONTRACT_ROOT; the first contract action was rejected before budget evaluation",
+    "v2": "implementation diagnostic: maxListPages was not enforced separately, so three distinct list reads were accepted"
+  }
+}

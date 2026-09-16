@@ -1,0 +1,94 @@
+{
+  "workflow": "reviews",
+  "routeHints": [],
+  "target": {
+    "entity": "reviews",
+    "identity": "task-target",
+    "desiredState": "task-success"
+  },
+  "contextModel": {
+    "capabilityIds": [],
+    "surfaceIds": [],
+    "actionIds": [],
+    "evidenceIds": [],
+    "supportStatus": "fallback",
+    "limitations": [],
+    "fallbackOnUnsupported": true
+  },
+  "allowedActions": [
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "verifyAnswerEvidence",
+    "enforcement": "observe",
+    "responseField": "evidence_ledger",
+    "requiredFields": [
+      "evidenceStatus",
+      "result",
+      "evidenceRecordIds",
+      "filters",
+      "ledger"
+    ],
+    "submissionSchema": {
+      "type": "object",
+      "required": [
+        "retrieved_data",
+        "evidence_ledger"
+      ],
+      "properties": {
+        "retrieved_data": {
+          "description": "Benchmark answer in the task response schema."
+        },
+        "evidence_ledger": {
+          "type": "object",
+          "required": [
+            "evidenceStatus",
+            "result",
+            "evidenceRecordIds",
+            "filters",
+            "ledger"
+          ],
+          "properties": {
+            "evidenceStatus": {
+              "const": "verified"
+            },
+            "result": {
+              "description": "Must equal retrieved_data after removing its outer one-item array."
+            },
+            "evidenceRecordIds": {
+              "type": "array",
+              "minItems": 1
+            },
+            "filters": {
+              "type": "object"
+            },
+            "ledger": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "failureAction": "reject_success_or_fallback"
+  },
+  "responseContract": {
+    "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+    "onNotFound": {
+      "status": "NOT_FOUND_ERROR",
+      "retrievedData": null,
+      "forbiddenRetrievedData": [
+        "empty_array",
+        "zero_array"
+      ]
+    },
+    "onSuccess": {
+      "status": "SUCCESS",
+      "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+    }
+  }
+}

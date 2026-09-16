@@ -1,0 +1,167 @@
+{
+  "workflow": "order-lookup",
+  "routeHints": [],
+  "target": {
+    "entity": "order-lookup",
+    "identity": "task-target",
+    "desiredState": "task-success"
+  },
+  "contextModel": {
+    "capabilityIds": [
+      "inspect-orders"
+    ],
+    "surfaceIds": [
+      "storefront-orders"
+    ],
+    "actionIds": [
+      "orders-inspect-history",
+      "orders-inspect-detail"
+    ],
+    "evidenceIds": [
+      "orders-empty-history",
+      "orders-single-history-detail",
+      "orders-multiple-history-detail"
+    ],
+    "supportStatus": "supported",
+    "limitations": [
+      {
+        "id": "large-order-history-pagination",
+        "status": "partially_evidenced",
+        "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+      }
+    ],
+    "fallbackOnUnsupported": true
+  },
+  "selectionContract": {
+    "entity": "order_set",
+    "preserveTaskConstraints": [
+      "exact_date",
+      "product_category",
+      "status"
+    ],
+    "detailEvidenceRequired": true,
+    "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
+    "amountFieldByConstraint": {
+      "excludeShippingAndHandling": "item_subtotal",
+      "includeShippingAndHandling": "grand_total"
+    },
+    "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
+  },
+  "allowedActions": [
+    "collect_order_history_v1",
+    "read_order_detail_items_v1",
+    "verify_final_state_v1",
+    "submit_answer_evidence_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "verifyAnswerEvidence",
+    "enforcement": "observe",
+    "responseField": "evidence_ledger",
+    "submitActionId": "submit_answer_evidence_v1",
+    "requiredFields": [
+      "evidenceStatus",
+      "result",
+      "evidenceRecordIds",
+      "filters",
+      "ledger"
+    ],
+    "submissionSchema": {
+      "type": "object",
+      "required": [
+        "retrieved_data",
+        "evidence_ledger"
+      ],
+      "properties": {
+        "retrieved_data": {
+          "description": "Benchmark answer in the task response schema."
+        },
+        "evidence_ledger": {
+          "type": "object",
+          "required": [
+            "evidenceStatus",
+            "result",
+            "evidenceRecordIds",
+            "filters",
+            "ledger"
+          ],
+          "properties": {
+            "evidenceStatus": {
+              "const": "verified"
+            },
+            "result": {
+              "description": "Must equal retrieved_data after removing its outer one-item array."
+            },
+            "evidenceRecordIds": {
+              "type": "array",
+              "minItems": 1
+            },
+            "filters": {
+              "type": "object"
+            },
+            "ledger": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "failureAction": "reject_success_or_fallback"
+  },
+  "responseContract": {
+    "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+    "onNotFound": {
+      "status": "NOT_FOUND_ERROR",
+      "retrievedData": null,
+      "forbiddenRetrievedData": [
+        "empty_array",
+        "zero_array"
+      ]
+    },
+    "onSuccess": {
+      "status": "SUCCESS",
+      "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+    }
+  },
+  "contractAction": {
+    "tool": "localweb_contract_action",
+    "arguments": {
+      "action_id": "collect_order_history_v1",
+      "workflow": "order-lookup",
+      "route": "shopping",
+      "contract_path": "webarena-shopping/references/execution-contract.json",
+      "page_id": "$CURRENT_URL",
+      "arguments": {}
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxPages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "default": 12
+        },
+        "status": {
+          "type": "string",
+          "description": "Exact observed status, case insensitive."
+        },
+        "dateFrom": {
+          "type": "string",
+          "description": "Inclusive YYYY-MM-DD lower bound."
+        },
+        "dateTo": {
+          "type": "string",
+          "description": "Inclusive YYYY-MM-DD upper bound."
+        }
+      }
+    },
+    "required_first_step": true,
+    "call": "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。"
+  }
+}

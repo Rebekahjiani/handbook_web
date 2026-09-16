@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-cart-checkout",
+  "observations": [
+    {"id": "cart-has-item", "condition": "The cart contains at least one product.", "evidence_ids": ["cart-add-and-nonempty"]},
+    {"id": "checkout-ready-for-payment", "condition": "Checkout has advanced to the payment stage.", "evidence_ids": ["checkout-payment-ready"]},
+    {"id": "checkout-order-confirmed", "condition": "Order submission has completed and confirmation is observable.", "evidence_ids": ["checkout-order-confirmed"]}
+  ]
+}

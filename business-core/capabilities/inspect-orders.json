@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "inspect-orders",
+  "object_ids": ["customer-account", "order-collection", "order"],
+  "inputs": ["An authenticated customer account and order selection criteria."],
+  "outputs": ["Observed order records and details that satisfy the requested criteria."],
+  "business_conditions": ["Empty and populated order histories must be distinguished.", "Order identity must remain attached to its own details.", "Unsupported mutations must not be inferred from order visibility."],
+  "requires_context_ids": ["authenticated-shopping", "order-analysis"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["orders-empty-history", "orders-single-history-detail", "orders-multiple-history-detail"]}]
+}

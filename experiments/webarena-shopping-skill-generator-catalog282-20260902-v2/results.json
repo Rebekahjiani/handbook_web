@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment": "webarena-shopping-skill-generator-catalog282-20260902-v2",
+  "status": "completed_failure",
+  "task_id": 282,
+  "condition": "baselineB_skill_routed",
+  "official_score": 0.0,
+  "runtime_status": "timeout",
+  "agent_response_status": "UNKNOWN_ERROR",
+  "trace": {
+    "path": "/opt/artifacttrace/local-at/tasks/09-02-wa-baselinebskillrouted-task-282-20260902-020105/.at/run/run_20260902_020108_0d3c/trace.jsonl",
+    "model_calls_completed": 40,
+    "tool_calls_started": 40,
+    "tool_calls_completed": 39,
+    "contract_list_reads": 13,
+    "terminal_event": "run_failed",
+    "summed_model_tokens": {"input": 2062967, "output": 31760}
+  },
+  "observations": {
+    "search_box_interactions": 0,
+    "direct_core_term_navigation_followed": true,
+    "answer_evidence_submissions": 0,
+    "final_url": "http://localhost:7770/catalogsearch/result/index/?p=6&product_list_limit=36&q=nike",
+    "machine_budget_enforced": false,
+    "root_causes": [
+      "the agent ignored the stop/facet fallback policy after observing a broad result",
+      "the execution contract budget was audited as passed even after 13 list reads and continued broad pagination",
+      "natural-language Skill rules do not enforce the machine contract at runtime"
+    ]
+  },
+  "decision": "Do not add more catalog prose rules. Next work should enforce query/action budgets in the runtime contract path, compress the catalog Skill to an executable state machine, and add typed product taxonomy evidence to the Context Model before any broad trace collection.",
+  "server_output": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v2/baselineB_skill_routed/282"
+}

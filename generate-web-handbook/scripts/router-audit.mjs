@@ -107,6 +107,9 @@ export function auditRouter({
         intent: taskIntent(task),
       });
     }
+    // A task matched by two primary workflows is ambiguous even when priority picks
+    // one deterministically. Keep the overlap visible so a new route cannot silently
+    // steal coverage from an existing workflow.
     const alternatives = matches
       .slice(1)
       .filter((route) => !route.fallback && !route.backoff)

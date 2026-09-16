@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "experiment": "webarena-shopping-skill-generator-targeted3-20260901-v1",
+  "created_at": "2026-09-01T15:43:39+08:00",
+  "purpose": "Validate the smallest generator, router, response-contract, and catalog-budget changes against tasks 319, 332, and 282.",
+  "classification": "targeted_paired_regression_not_full_benchmark",
+  "task_ids": [319, 332, 282],
+  "conditions": {
+    "A": "baseline with the updated shared runner and no injected Skill",
+    "B": "baselineB_skill_routed with the updated generated Shopping Skill and execution contract"
+  },
+  "run_order": [
+    {"task_id": 319, "groups": ["baseline", "baselineB_skill_routed"]},
+    {"task_id": 332, "groups": ["baselineB_skill_routed", "baseline"]},
+    {"task_id": 282, "groups": ["baseline", "baselineB_skill_routed"]}
+  ],
+  "fixed_runtime": {
+    "agent_id": "阿器",
+    "timeout_seconds": 600,
+    "contract_audit_mode": "enforce",
+    "run_evaluator": true,
+    "reset_each_run": true,
+    "output_root": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-targeted3-20260901-v1"
+  },
+  "frozen_hashes": {
+    "handbook_web_commit": "742377dd58babfa72a0dc3fb97d4084c8c888eb1",
+    "artifacttrace_commit": "736596e425b60bf5de15864790d30a84e89863ac",
+    "capability_router_source_sha256": "4cf8bf1d43033f0948867fc4305f38bbb6c7d3c012627fea9ca64aa382338516",
+    "workflow_generator_source_sha256": "68978406c147ebf84f3bdd8b959f6e32efa956c687e9577e9af3deed55dda22a",
+    "runner_sha256": "832f87bc1c64bb752c1c04221a5ba7936048e63ec63be7190696a495134fa8c7",
+    "router_sha256": "126edee1466780bc9fbb41e92d95e859a673872f0b7f6c0185360ef16145b116",
+    "order_aggregation_skill_sha256": "791a8b1c3f0adc085e72921fa87f8bc7a039b20b5a281c82879b0c32d6c9f28c",
+    "catalog_aggregation_skill_sha256": "f2d69af1d5fa2474989a6b0f444d2a17ffe050c8c5229f4400102fc7dc4e7e38",
+    "execution_contract_sha256": "e3b6afcd4c80e136c10e81da60bc739088c3bc188cd14c4d590abca1d6211216"
+  },
+  "attribution_rules": {
+    "task_319": "If both A and B improve, attribute the shared null-response correction to the runner contract, not to Skill.",
+    "task_332": "A B difference primarily tests routed order aggregation and canceled/refunded filtering.",
+    "task_282": "Compare completion, score, tool calls, query path, and timeout behavior; do not treat a faster wrong answer as an accuracy gain."
+  }
+}

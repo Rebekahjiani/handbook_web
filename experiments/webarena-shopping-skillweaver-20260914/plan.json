@@ -1,0 +1,54 @@
+{
+  "experiment": "webarena-shopping-skillweaver-20260914",
+  "status": "implementation",
+  "created_at": "2026-09-14T07:57:04.826428+00:00",
+  "hypothesis": "将分页、去重、边界验证编译为参数化可执行程序，能否改善旧 generator 的准确率与在线成本",
+  "reference_commit": "f2a63d65d0f6ff46ac30e817cede8797f8f25b97",
+  "task_ids": [
+    22,
+    96,
+    118,
+    141,
+    161,
+    164,
+    228,
+    234,
+    238,
+    240,
+    261,
+    264,
+    276,
+    282,
+    299,
+    313,
+    319,
+    322,
+    330,
+    332
+  ],
+  "classification": "development_regression_pilot_not_held_out",
+  "conditions": {
+    "control": "现役旧 generator，同期协议，独立产物目录",
+    "candidate": "参数化程序 generator，与 control 共用兼容 runtime"
+  },
+  "frozen_control_archive_sha256": "c3b37226a2cc627cd81723e234164c05a3530f6233a563a2f2971e26d1706238",
+  "source_head": "448d9fa961c32d1a37ccf81df7ec06f595ad7c62",
+  "preexisting_source_hashes": {
+    "generate-web-handbook/scripts/task-workflows.mjs": "65bf1877d0998d60c5e142b46f0fbbda481428c7a835c85a416bc47feef1830b",
+    "generate-web-handbook/scripts/workflows/shopping.mjs": "a4cc2f3c437167cdd905961660e85619b0e7a7e014d76c8afd18aba78777a860",
+    "generate-web-handbook/scripts/test-generator.mjs": "eef57aad9473dec236cafb30743caf7724036e965972d799ccc2c5d47db533e5",
+    "generate-web-handbook/scripts/rebuild-from-snapshots.mjs": "b501708024f7c52ff0e69d3bd299e8beda68845f46320bcf59b3707c97bfc186"
+  },
+  "acceptance": [
+    "paired accuracy 不下降",
+    "negative flips = 0",
+    "contract violations = 0",
+    "P95 input tokens 和 tool calls 不恶化"
+  ],
+  "notes": [
+    "不修改历史 baseline 或冻结 Context Model",
+    "预检工具调用及 reset，运行前冻结 runtime/config/dataset/candidate 指纹",
+    "不根据本轮评测答案调整候选；基础设施故障另存，agent 失败保留分母",
+    "离线合成与验证成本单列；不是 SkillWeaver 全框架复现"
+  ]
+}

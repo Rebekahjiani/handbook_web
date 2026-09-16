@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "experiment": "webarena-shopping-skill-generator-targeted3-20260901-v1",
+  "status": "completed",
+  "classification": "targeted_paired_regression_not_full_benchmark",
+  "results": [
+    {
+      "task_id": 319,
+      "baseline_score": 0.0,
+      "skill_score": 0.0,
+      "baseline_response": {"status": "NOT_FOUND_ERROR", "retrieved_data": null},
+      "skill_response": {"status": "NOT_FOUND_ERROR", "retrieved_data": null},
+      "finding": "Both conditions satisfy the intended null response contract, but the frozen evaluator normalization still reports a mismatch; no benchmark or evaluator files were changed."
+    },
+    {
+      "task_id": 332,
+      "baseline_score": 0.0,
+      "skill_score": 1.0,
+      "baseline_result": [
+        {"month": "January", "total": 542.88},
+        {"month": "February", "total": 1309.03},
+        {"month": "March", "total": 53.31}
+      ],
+      "skill_result": [
+        {"month": "January", "total": 542.88},
+        {"month": "February", "total": 912.5},
+        {"month": "March", "total": 53.31}
+      ],
+      "finding": "Positive flip. The routed order aggregation excluded canceled/refunded orders and used item subtotal semantics."
+    },
+    {
+      "task_id": 282,
+      "baseline_score": 0.0,
+      "skill_score": 0.0,
+      "baseline_runtime": "timeout",
+      "skill_runtime": "timeout",
+      "baseline_tool_calls": 41,
+      "skill_tool_calls": 37,
+      "finding": "The catalog strategy reduced tool calls but still timed out and did not return a result."
+    }
+  ],
+  "summary": {
+    "baseline_successes": 0,
+    "skill_successes": 1,
+    "positive_flips": [332],
+    "negative_flips": [],
+    "conclusion": "Order aggregation generator changes are effective on the targeted failure; catalog aggregation remains unresolved."
+  },
+  "server_output_root": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-targeted3-20260901-v1"
+}

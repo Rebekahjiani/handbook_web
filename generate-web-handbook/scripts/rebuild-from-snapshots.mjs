@@ -5,9 +5,26 @@ import path from "node:path";
 import {
   buildWorkflowHandbook,
   loadTaskCorpus,
+  executableSkillMarkdown,
+  runtimeContract,
 } from "./task-workflows.mjs";
+import { shoppingCollectionAction } from "./workflows/shopping.mjs";
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
+import {
+  provenanceForContextRoot,
+  sha256File,
+} from "./context-model-provenance.mjs";
+
+async function loadWorkflowDefs(configPath) {
+  if (!configPath) return null;
+  const resolved = path.resolve(configPath);
+  const mod = await import(resolved);
+  if (!Array.isArray(mod.default)) {
+    throw new Error(`--workflow-config must export a default array: ${resolved}`);
+  }
+  return mod.default;
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -35,6 +52,75 @@ async function writeJsonAtomic(file, value) {
   await fs.rename(temporary, file);
 }
 
+async function applyExecutionContractSeed(generated, seedFile) {
+  if (!seedFile || !(await pathExists(seedFile))) return [];
+  const eligibleWorkflows = new Set(["order-aggregation", "order-lookup"]);
+  const seed = JSON.parse(await fs.readFile(seedFile, "utf8"));
+  const seedRuntimeDir = path.join(path.dirname(path.dirname(seedFile)), "runtime-contracts");
+  const reused = [];
+  for (const [workflow, current] of Object.entries(generated.executionContract.workflows || {})) {
+    if (!eligibleWorkflows.has(workflow)) continue;
+    const seeded = seed.workflows?.[workflow];
+    const submissionActions = (current.actions || []).filter(
+      (action) => action.kind === "evidence.submit",
+    );
+    const currentReadActions = (current.actions || []).filter(
+      (action) => action.kind !== "evidence.submit",
+    );
+    if (
+      current.contextModel?.supportStatus !== "supported" ||
+      currentReadActions.length ||
+      !(seeded?.actions || []).length
+    ) continue;
+    current.actions = [...seeded.actions, ...submissionActions];
+    current.allowedActions = [
+      ...new Set([
+        ...(seeded.allowedActions || []),
+        ...submissionActions.map((action) => action.actionId),
+      ]),
+    ];
+    current.forbiddenActions = seeded.forbiddenActions || current.forbiddenActions;
+    current.budgets = seeded.budgets || current.budgets;
+    current.preflightGuards = seeded.preflightGuards || current.preflightGuards;
+    current.ir = {
+      ...current.ir,
+      ...(seeded.ir?.selectionContract
+        ? { selectionContract: seeded.ir.selectionContract }
+        : {}),
+      allowedActions: [
+        ...new Set([
+          ...(seeded.ir?.allowedActions || seeded.allowedActions || []),
+          ...submissionActions.map((action) => action.actionId),
+        ]),
+      ],
+    };
+    current.machineEvidenceSeed = {
+      path: seedFile,
+      sha256: sha256File(seedFile),
+      generatedAt: seed.generatedAt || null,
+    };
+    const runtimeFile = path.join(seedRuntimeDir, `${workflow}.json`);
+    if (await pathExists(runtimeFile)) {
+      generated.runtimeContracts[`${workflow}.json`] = {
+        ...JSON.parse(await fs.readFile(runtimeFile, "utf8")),
+        contextModel: current.contextModel,
+      };
+    }
+    const source = current.actions.find(action => action.actionId === "read_order_history_page_v1");
+    const program = source && current.siteKeys.includes("shopping")
+      ? shoppingCollectionAction(source, current.budgets.maxListPages || 12) : null;
+    if (program) {
+      current.actions = current.actions.map(action => action === source ? program : action);
+      current.allowedActions = current.allowedActions.map(id => id === source.actionId ? program.actionId : id);
+      current.ir.allowedActions = [...current.allowedActions];
+      generated.runtimeContracts[`${workflow}.json`] = runtimeContract(current);
+      generated.runtimeSkills[`${workflow}/SKILL.md`] = executableSkillMarkdown(current, generated.executionContract.site.name);
+    }
+    reused.push(workflow);
+  }
+  return reused;
+}
+
 function slug(value, fallback = "site") {
   const result = String(value || "")
     .toLowerCase()
@@ -47,6 +133,7 @@ function slug(value, fallback = "site") {
 
 async function writeAggregateRouter(outputRoot) {
   const routes = [];
+  const sequences = [];
   for (const entry of await fs.readdir(outputRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.includes(".previous-")) continue;
     const routerFile = path.join(outputRoot, entry.name, "router.json");
@@ -61,11 +148,23 @@ async function writeAggregateRouter(outputRoot) {
           : {}),
       });
     }
+    for (const sequence of router.sequences || []) {
+      sequences.push({
+        ...sequence,
+        skill_files: (sequence.skill_files || []).map((file) =>
+          path.posix.join(entry.name, file),
+        ),
+        ...(sequence.contract_file
+          ? { contract_file: path.posix.join(entry.name, sequence.contract_file) }
+          : {}),
+      });
+    }
   }
   await writeJsonAtomic(path.join(outputRoot, "webarena-router.json"), {
     schema_version: 1,
     router: "webarena-handbook-router",
     routes,
+    sequences,
   });
 }
 
@@ -89,9 +188,11 @@ async function main() {
   const coverageCorpusFile = args["coverage-corpus"] || manifest.coverageCorpusFile;
   const focusTasksFile = args["focus-tasks"] || manifest.focusTasksFile || coverageCorpusFile;
   const contextModelPath = args["context-model"] || manifest.contextModelPath;
+  const executionContractSeedPath = args["execution-contract-seed"] || manifest.executionContractSeedPath;
   const coverageTasks = await loadTaskCorpus(coverageCorpusFile, siteKey);
   const focusTasks = await loadTaskCorpus(focusTasksFile, siteKey);
   const contextModel = await loadContextModel(contextModelPath);
+  const workflowDefs = await loadWorkflowDefs(args["workflow-config"] || manifest.workflowConfig || null);
   const skillName = `use-${slug(siteName)}`.replace(/-$/, "");
   const pages = selectors.pages || [];
 
@@ -104,7 +205,14 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    artifactRoot: siteDir,
+    evidenceOnly: manifest.exploration?.mode === "independent",
+    ...(workflowDefs ? { workflowDefs } : {}),
   });
+  const reusedSeedWorkflows = await applyExecutionContractSeed(
+    generated,
+    executionContractSeedPath ? path.resolve(executionContractSeedPath) : null,
+  );
   const previousRouterFile = path.join(siteDir, "router.json");
   const previousRouter = (await pathExists(previousRouterFile))
     ? JSON.parse(await fs.readFile(previousRouterFile, "utf8"))
@@ -115,6 +223,10 @@ async function main() {
     siteKey: siteKey || generated.router.site.key,
     origin,
     previousRouter,
+    allowedRouteRemovals:
+      manifest.exploration?.mode === "independent"
+        ? (previousRouter?.routes || []).map((route) => route.route).filter(Boolean)
+        : [],
     allowFallbackAssignments: args["allow-fallback-assignments"] === "true",
   });
   if (!routerAudit.passed) {
@@ -135,7 +247,22 @@ async function main() {
       (sum, contract) => sum + contract.actions.length,
       0,
     ),
+    reusedSeedWorkflows,
   };
+  if (contextModelPath) {
+    generated.coverage.contextModelProvenance = provenanceForContextRoot(
+      path.resolve(contextModelPath),
+      {
+        rawEvidencePath: manifest.exploration?.rawEvidencePath,
+        reviewedEvidencePath: manifest.exploration?.reviewedEvidencePath,
+        convergence: manifest.exploration?.convergence || null,
+        humanJudgments: manifest.exploration?.humanJudgments || [],
+        commands: manifest.exploration?.commands || {},
+        codeHashes: manifest.exploration?.codeHashes || {},
+        exitCodes: manifest.exploration?.exitCodes || {},
+      },
+    );
+  }
 
   const workflowDir = path.join(siteDir, "references", "workflows");
   await fs.mkdir(workflowDir, { recursive: true });
@@ -148,6 +275,11 @@ async function main() {
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, content);
   }
+  const runtimeContractDir = path.join(siteDir, "runtime-contracts");
+  await fs.mkdir(runtimeContractDir, { recursive: true });
+  for (const [filename, content] of Object.entries(generated.runtimeContracts || {})) {
+    await writeJsonAtomic(path.join(runtimeContractDir, filename), content);
+  }
   await fs.writeFile(path.join(siteDir, "SKILL.md"), generated.skill);
   await fs.writeFile(path.join(siteDir, "references", "handbook.md"), generated.handbook);
   await writeJsonAtomic(path.join(siteDir, "references", "execution-contract.json"), generated.executionContract);
@@ -158,10 +290,20 @@ async function main() {
 
   manifest.status = "rebuilt_from_snapshots";
   manifest.updatedAt = new Date().toISOString();
+  if (args["workflow-config"] && !manifest.workflowConfig) {
+    manifest.workflowConfig = path.resolve(args["workflow-config"]);
+  }
+  if (args["context-model"]) {
+    manifest.contextModelPath = path.resolve(args["context-model"]);
+  }
+  if (args["execution-contract-seed"]) {
+    manifest.executionContractSeedPath = path.resolve(args["execution-contract-seed"]);
+  }
   manifest.summary = {
     ...(manifest.summary || {}),
     workflowsGenerated: generated.coverage.workflows.length,
     executionContractActions: generated.coverage.executionContract.actionCount,
+    contextModelLoaded: Boolean(contextModel),
   };
   await writeJsonAtomic(manifestFile, manifest);
   process.stdout.write(`${siteDir}\n`);

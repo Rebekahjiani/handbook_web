@@ -1,0 +1,175 @@
+{
+  "workflow": "catalog-aggregation",
+  "routeHints": [
+    {
+      "path": "/electronics/headphones/earbud-headphones.html",
+      "label": "electronics > headphones > earbud headphones",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/beauty-personal-care/oral-care/teeth-whitening.html",
+      "label": "beauty personal care > oral care > teeth whitening",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/office-products/office-electronics/printers-accessories.html",
+      "label": "office products > office electronics > printers accessories",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/beauty-personal-care/hair-care/styling-products.html",
+      "label": "beauty personal care > hair care > styling products",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/electronics/headphones.html",
+      "label": "electronics > headphones",
+      "terms": {},
+      "leafTerms": {}
+    },
+    {
+      "path": "/beauty-personal-care/oral-care/children-s-dental-care.html",
+      "label": "beauty personal care > oral care > children s dental care",
+      "terms": {},
+      "leafTerms": {}
+    }
+  ],
+  "target": {
+    "entity": "catalog-aggregation",
+    "identity": "task-target",
+    "desiredState": "task-success"
+  },
+  "contextModel": {
+    "capabilityIds": [
+      "browse-catalog"
+    ],
+    "surfaceIds": [
+      "storefront-catalog"
+    ],
+    "actionIds": [
+      "catalog-browse-category",
+      "catalog-advance-results"
+    ],
+    "evidenceIds": [
+      "catalog-home-category-pagination"
+    ],
+    "supportStatus": "supported",
+    "limitations": [],
+    "fallbackOnUnsupported": true
+  },
+  "allowedActions": [
+    "collect_product_pages_v1",
+    "submit_answer_evidence_v1",
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "verifyAnswerEvidence",
+    "enforcement": "observe",
+    "responseField": "evidence_ledger",
+    "submitActionId": "submit_answer_evidence_v1",
+    "requiredFields": [
+      "evidenceStatus",
+      "result",
+      "evidenceRecordIds",
+      "filters",
+      "ledger"
+    ],
+    "submissionSchema": {
+      "type": "object",
+      "required": [
+        "retrieved_data",
+        "evidence_ledger"
+      ],
+      "properties": {
+        "retrieved_data": {
+          "description": "Benchmark answer in the task response schema."
+        },
+        "evidence_ledger": {
+          "type": "object",
+          "required": [
+            "evidenceStatus",
+            "result",
+            "evidenceRecordIds",
+            "filters",
+            "ledger"
+          ],
+          "properties": {
+            "evidenceStatus": {
+              "const": "verified"
+            },
+            "result": {
+              "description": "Must equal retrieved_data after removing its outer one-item array."
+            },
+            "evidenceRecordIds": {
+              "type": "array",
+              "minItems": 1
+            },
+            "filters": {
+              "type": "object"
+            },
+            "ledger": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "failureAction": "reject_success_or_fallback"
+  },
+  "responseContract": {
+    "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+    "onNotFound": {
+      "status": "NOT_FOUND_ERROR",
+      "retrievedData": null,
+      "forbiddenRetrievedData": [
+        "empty_array",
+        "zero_array"
+      ]
+    },
+    "onSuccess": {
+      "status": "SUCCESS",
+      "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+    }
+  },
+  "contractAction": {
+    "tool": "localweb_contract_action",
+    "arguments": {
+      "action_id": "collect_product_pages_v1",
+      "workflow": "catalog-aggregation",
+      "route": "shopping",
+      "contract_path": "webarena-shopping/references/execution-contract.json",
+      "page_id": "$CURRENT_URL",
+      "arguments": {}
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxPages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2,
+          "default": 2
+        },
+        "nameContains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+        }
+      }
+    },
+    "required_first_step": true,
+    "call": "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。"
+  }
+}

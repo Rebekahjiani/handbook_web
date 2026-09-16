@@ -1,0 +1,120 @@
+{
+  "segments": [
+    {
+      "segmentId": "f337b4dd-fd87-4b78-9896-a275e1316a78",
+      "segmentIndex": 0,
+      "startedAt": 1787295648084,
+      "stoppedAt": 1787295663088,
+      "durationMs": 15004,
+      "eventCount": 242388,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000001.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "023534ff-5daa-4a48-ad4a-2d3f73d0f0a3",
+      "segmentIndex": 1,
+      "startedAt": 1787295665157,
+      "stoppedAt": 1787295678089,
+      "durationMs": 12932,
+      "eventCount": 37555,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000002.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "940d770c-d1c6-43f2-b2f5-223f892101db",
+      "segmentIndex": 2,
+      "startedAt": 1787295678426,
+      "stoppedAt": 1787295693090,
+      "durationMs": 14664,
+      "eventCount": 254878,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000003.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "38c0d034-e8ce-40f6-976a-6b72d60ecbe5",
+      "segmentIndex": 3,
+      "startedAt": 1787295695158,
+      "stoppedAt": 1787295708090,
+      "durationMs": 12932,
+      "eventCount": 45099,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000004.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "3aeb0671-5c90-4ad7-b1f8-8bebfea45c09",
+      "segmentIndex": 4,
+      "startedAt": 1787295708555,
+      "stoppedAt": 1787295723090,
+      "durationMs": 14535,
+      "eventCount": 126954,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000005.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "11d6a3d1-a330-4d55-9fba-25d44e1f0144",
+      "segmentIndex": 5,
+      "startedAt": 1787295724324,
+      "stoppedAt": 1787295738091,
+      "durationMs": 13767,
+      "eventCount": 442104,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000006.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "39e8a31c-6ba3-4fda-8216-cdd1a5328604",
+      "segmentIndex": 6,
+      "startedAt": 1787295741722,
+      "stoppedAt": 1787295753085,
+      "durationMs": 11363,
+      "eventCount": 36799,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000007.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "97fcef74-5003-415e-9a6c-11a2abcf66ec",
+      "segmentIndex": 7,
+      "startedAt": 1787295753411,
+      "stoppedAt": 1787295768072,
+      "durationMs": 14661,
+      "eventCount": 52702,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000008.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "c2fe0f31-cf19-4b1b-ac51-97ba01f16b96",
+      "segmentIndex": 8,
+      "startedAt": 1787295768578,
+      "stoppedAt": 1787295783069,
+      "durationMs": 14491,
+      "eventCount": 42452,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000009.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "007181d9-1405-4637-a74f-71ab6e145e8d",
+      "segmentIndex": 9,
+      "startedAt": 1787295783427,
+      "stoppedAt": 1787295798067,
+      "durationMs": 14640,
+      "eventCount": 181833,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000010.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "f63e9945-5d26-4dba-9723-e290977c4bc6",
+      "segmentIndex": 10,
+      "startedAt": 1787295799683,
+      "stoppedAt": 1787295799690,
+      "durationMs": 7,
+      "eventCount": 376,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/trace.segment.000011.jsonl",
+      "status": "completed"
+    }
+  ],
+  "totalDurationMs": 138996,
+  "totalEventCount": 1463140,
+  "startedAt": 1787295648084,
+  "stoppedAt": 1787295799690,
+  "dataLossOccurred": true,
+  "maxSwitchGapMs": 3631
+}

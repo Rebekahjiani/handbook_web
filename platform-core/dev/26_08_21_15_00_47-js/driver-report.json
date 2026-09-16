@@ -1,0 +1,137 @@
+{
+  "label": "storefront",
+  "runRoot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js",
+  "writtenAt": "2026-08-21T07:03:19.941Z",
+  "steps": [
+    {
+      "index": 1,
+      "ts": "2026-08-21T07:00:48.089Z",
+      "name": "open_home",
+      "ok": true,
+      "url": "http://localhost:7770/",
+      "screenshot": "driver-screenshots/001-open-home.png"
+    },
+    {
+      "index": 2,
+      "ts": "2026-08-21T07:00:51.245Z",
+      "name": "category_browse",
+      "ok": true,
+      "url": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "categoryUrl": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "title": "Beauty & Personal Care",
+      "screenshot": "driver-screenshots/002-category-browse.png"
+    },
+    {
+      "index": 3,
+      "ts": "2026-08-21T07:00:54.800Z",
+      "name": "product_detail",
+      "ok": true,
+      "url": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "title": "Beauty & Personal Care",
+      "price": "$224.76",
+      "reviews": "no-reviews",
+      "screenshot": "driver-screenshots/003-product-detail.png"
+    },
+    {
+      "index": 4,
+      "ts": "2026-08-21T07:01:27.079Z",
+      "name": "search_discovery",
+      "ok": true,
+      "url": "http://localhost:7770/anime-girls-phone-case-nezuko-phone-case-anime-phone-case-for-iphone-12-compatible-from-iphone-7-series-to-13-series-cases-comes-with-a-keychain-mdz-12.html",
+      "term": "phone case",
+      "results": 61,
+      "screenshot": "driver-screenshots/004-search-discovery.png"
+    },
+    {
+      "index": 5,
+      "ts": "2026-08-21T07:01:29.454Z",
+      "name": "product_detail_2",
+      "ok": true,
+      "url": "http://localhost:7770/anime-girls-phone-case-nezuko-phone-case-anime-phone-case-for-iphone-12-compatible-from-iphone-7-series-to-13-series-cases-comes-with-a-keychain-mdz-12.html",
+      "title": "Anime Girls Phone Case, Nezuko Phone Case, Anime Phone Case for iPhone 12, Compatible from iPhone 7 Series to 13 Series Cases, Comes with a Keychain(MDZ,12)",
+      "price": "$14.99",
+      "reviews": "has-reviews",
+      "screenshot": "driver-screenshots/005-product-detail-2.png"
+    },
+    {
+      "index": 6,
+      "ts": "2026-08-21T07:02:01.421Z",
+      "name": "login_ensure",
+      "ok": true,
+      "url": "http://localhost:7770/customer/account",
+      "loggedIn": true,
+      "method": "already",
+      "screenshot": "driver-screenshots/006-login-ensure.png"
+    },
+    {
+      "index": 7,
+      "ts": "2026-08-21T07:02:03.358Z",
+      "name": "add_to_cart",
+      "ok": true,
+      "url": "http://localhost:7770/tweezers-for-succulents-duo.html",
+      "added": true,
+      "attempts": 1,
+      "product": "Tweezers For Succulents Duo",
+      "screenshot": "driver-screenshots/007-add-to-cart.png"
+    },
+    {
+      "index": 8,
+      "ts": "2026-08-21T07:02:08.349Z",
+      "name": "cart_view",
+      "ok": true,
+      "url": "http://localhost:7770/checkout/cart",
+      "emptyCart": false,
+      "screenshot": "driver-screenshots/008-cart-view.png"
+    },
+    {
+      "index": 9,
+      "ts": "2026-08-21T07:02:10.632Z",
+      "name": "checkout",
+      "ok": true,
+      "url": "http://localhost:7770/checkout/#payment",
+      "placed": false,
+      "stuckAt": "http://localhost:7770/checkout/#payment",
+      "lastFilled": [],
+      "screenshot": "driver-screenshots/009-checkout.png"
+    },
+    {
+      "index": 10,
+      "ts": "2026-08-21T07:03:14.686Z",
+      "name": "order_history",
+      "ok": true,
+      "url": "http://localhost:7770/sales/order/view/order_id/190/",
+      "orderRows": 1,
+      "screenshot": "driver-screenshots/010-order-history.png"
+    },
+    {
+      "index": 11,
+      "ts": "2026-08-21T07:03:18.128Z",
+      "name": "account_page",
+      "ok": true,
+      "url": "http://localhost:7770/customer/account",
+      "screenshot": "driver-screenshots/011-account-page.png"
+    }
+  ],
+  "okSteps": 11,
+  "totalSteps": 11,
+  "pageName": "webarena_shopping",
+  "site": "http://localhost:7770",
+  "adminSite": "http://localhost:7780",
+  "preset": "js",
+  "orderPlaced": false,
+  "accountEmail": "wa.tracer.1787295647237@example.com",
+  "profiles": [
+    {
+      "profileId": "ea2f6198-9b8e-41bf-9163-6f8b853d2e47",
+      "pageName": "webarena_shopping",
+      "status": "completed",
+      "title": "One Stop Market",
+      "url": "http://localhost:7770/",
+      "durationMs": 151606,
+      "networkEventCount": 7692,
+      "interactionCount": 0,
+      "warningCount": 0,
+      "traceDir": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_15_00_47-js/698D50C4_trace"
+    }
+  ]
+}

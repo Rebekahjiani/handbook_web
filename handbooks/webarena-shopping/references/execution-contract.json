@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-05T07:16:50.626Z",
+  "generatedAt": "2026-09-14T08:17:29.285Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -16,25 +16,256 @@
       ],
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/order-aggregation/SKILL.md",
-      "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
+      "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
+      "contextModel": {
+        "capabilityIds": [
+          "aggregate-orders"
+        ],
+        "surfaceIds": [
+          "storefront-orders"
+        ],
+        "actionIds": [
+          "orders-inspect-history",
+          "orders-inspect-detail"
+        ],
+        "evidenceIds": [
+          "orders-multiple-history-detail"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "large-order-history-pagination",
+            "status": "partially_evidenced",
+            "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "aggregationPolicy": {
+        "spent": {
+          "excludeStatuses": [
+            "Canceled",
+            "Cancelled",
+            "Refunded"
+          ],
+          "applyStatusFilterBefore": [
+            "group",
+            "sum"
+          ]
+        },
+        "refund": {
+          "includeStatuses": [
+            "Canceled",
+            "Cancelled",
+            "Refunded"
+          ]
+        }
+      },
       "allowedActions": [
-        "verify_final_state_v1"
+        "collect_order_history_v1",
+        "read_order_detail_items_v1",
+        "verify_final_state_v1",
+        "submit_answer_evidence_v1"
       ],
-      "forbiddenActions": [],
+      "forbiddenActions": [
+        {
+          "kind": "browser.evaluate",
+          "when": "extracting product-list cards",
+          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+        },
+        {
+          "kind": "incremental-card-observation",
+          "when": "product-list selectors are available",
+          "reason": "List pages must be read atomically to prevent drift and repeated observation."
+        }
+      ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
-        "listReadMaxCallsPerPageId": null,
-        "customListEvaluateMaxCalls": null,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": 1,
+        "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
       },
-      "actions": [],
+      "preflightGuards": [
+        {
+          "id": "missing-past-months-window",
+          "when": {
+            "all": [
+              {
+                "field": "task.intent",
+                "contains": "past months"
+              },
+              {
+                "field": "task.intent",
+                "notMatches": "\\b\\d+\\b"
+              },
+              {
+                "field": "task.intent",
+                "notMatches": "\\b(?:from|between|after|before|since)\\b"
+              }
+            ]
+          },
+          "action": {
+            "type": "return_zero_value",
+            "responseSchema": "task.expected_response"
+          },
+          "before": "browser.navigation"
+        }
+      ],
+      "actions": [
+        {
+          "actionId": "collect_order_history_v1",
+          "kind": "browser.runCode",
+          "deterministic": true,
+          "scope": "current-collection-browser-ui",
+          "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "status": {
+                "type": "string",
+                "description": "Exact observed status, case insensitive."
+              },
+              "dateFrom": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD lower bound."
+              },
+              "dateTo": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD upper bound."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
+          "selectors": {
+            "row": "table#my-orders-table.history > tbody > tr",
+            "fields": {
+              "orderNumber": ":scope > td[data-th=\"Order #\"]",
+              "purchaseDate": ":scope > td[data-th=\"Date\"]",
+              "grandTotal": ":scope > td[data-th=\"Order Total\"] .price",
+              "status": ":scope > td[data-th=\"Status\"]",
+              "detailLink": ":scope > td[data-th=\"Actions\"] > a.action.view"
+            },
+            "pagination": {
+              "next": ".pages .pages-item-next > a.action.next",
+              "total": ".toolbar-amount"
+            }
+          },
+          "sourceActionId": "read_order_history_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_order_history_v1\",\"orders\":true,\"selectors\":{\"row\":\"table#my-orders-table.history > tbody > tr\",\"fields\":{\"orderNumber\":\":scope > td[data-th=\\\"Order #\\\"]\",\"purchaseDate\":\":scope > td[data-th=\\\"Date\\\"]\",\"grandTotal\":\":scope > td[data-th=\\\"Order Total\\\"] .price\",\"status\":\":scope > td[data-th=\\\"Status\\\"]\",\"detailLink\":\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
+          "requiredOutput": {
+            "requiredKeys": [
+              "ok",
+              "complete",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "orders",
+              "errors"
+            ],
+            "okWhen": [
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
+            ]
+          }
+        },
+        {
+          "actionId": "read_order_detail_items_v1",
+          "kind": "browser.evaluate",
+          "deterministic": true,
+          "scope": "current-order-detail-page",
+          "maxCallsPerPageId": 2,
+          "selectors": {
+            "row": "table#my-orders-table tbody tr",
+            "fields": {
+              "name": "td.col.name",
+              "sku": "td.col.sku",
+              "price": "td.col.price .price, td.col.price",
+              "qty": "td.col.qty",
+              "subtotal": "td.col.subtotal .price, td.col.subtotal"
+            },
+            "totalsLabel": ".block-order-details-view, .order-info"
+          },
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table tbody tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim().replace(/\\s+/g, \" \") || \"\";\n  const items = rows.map(row => ({\n    name: read(row, \"td.col.name\"),\n    sku: read(row, \"td.col.sku\"),\n    price: read(row, \"td.col.price .price, td.col.price\"),\n    qty: read(row, \"td.col.qty\"),\n    subtotal: read(row, \"td.col.subtotal .price, td.col.subtotal\")\n  }));\n  const totals = {};\n  for (const tr of document.querySelectorAll(\"table#my-orders-table tfoot tr\")) {\n    const label = tr.querySelector(\"th, td[data-th]\");\n    const value = tr.querySelector(\"td.amount .price, .price\");\n    if (label && value) totals[(label.getAttribute(\"data-th\") || label.textContent.trim()).trim()] = value.textContent.trim();\n  }\n  const orderDate = document.querySelector(\".order-date > span:not(.label)\")?.textContent.trim() || \"\";\n  if (!rows.length) errors.push(\"order-detail-items-empty-or-selector-mismatch\");\n  const completeItem = item => Boolean(item.name && item.sku && item.subtotal);\n  if (items.some(item => !completeItem(item))) errors.push(\"required-item-field-missing\");\n  return {\n    actionId: \"read_order_detail_items_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    orderDate,\n    totals,\n    itemCount: items.length,\n    items: items.map(item => ({ ...item, evidenceStatus: completeItem(item) ? \"verified\" : \"evidence_incomplete\" })),\n    errors\n  };\n}",
+          "requiredOutput": {
+            "actionId": "read_order_detail_items_v1",
+            "requiredKeys": [
+              "ok",
+              "evidenceStatus",
+              "pageId",
+              "orderDate",
+              "totals",
+              "itemCount",
+              "items",
+              "errors"
+            ],
+            "itemKeys": [
+              "name",
+              "sku",
+              "price",
+              "qty",
+              "subtotal",
+              "evidenceStatus"
+            ],
+            "okWhen": [
+              "errors is empty",
+              "itemCount equals items.length",
+              "each item has name, sku and item subtotal"
+            ]
+          }
+        },
+        {
+          "actionId": "submit_answer_evidence_v1",
+          "kind": "evidence.submit",
+          "deterministic": true,
+          "scope": "current-run-answer",
+          "maxCallsPerPageId": 1,
+          "requiredInput": {
+            "requiredKeys": [
+              "evidenceStatus",
+              "result",
+              "evidenceRecordIds",
+              "filters",
+              "ledger"
+            ],
+            "evidenceStatus": "verified",
+            "evidenceRecordIdsMinItems": 1
+          }
+        }
+      ],
       "finalStateGate": {
         "actionId": "verify_final_state_v1",
         "kind": "cdp.readCurrentPageState",
@@ -45,11 +276,201 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "submitActionId": "submit_answer_evidence_v1",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "order-aggregation",
+          "intentPattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "order_set",
+          "identity": "task-order-filter",
+          "desiredState": "evidence_complete"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "collect_order_history_v1",
+          "read_order_detail_items_v1",
+          "verify_final_state_v1",
+          "submit_answer_evidence_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "order_set",
+            "identity": "task-order-filter",
+            "desiredState": "evidence_complete"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "aggregationPolicy": {
+          "spent": {
+            "excludeStatuses": [
+              "Canceled",
+              "Cancelled",
+              "Refunded"
+            ],
+            "applyStatusFilterBefore": [
+              "group",
+              "sum"
+            ]
+          },
+          "refund": {
+            "includeStatuses": [
+              "Canceled",
+              "Cancelled",
+              "Refunded"
+            ]
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        },
+        "selectionContract": {
+          "entity": "order_set",
+          "preserveTaskConstraints": [
+            "exact_date",
+            "product_category",
+            "status"
+          ],
+          "detailEvidenceRequired": true,
+          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
+          "amountFieldByConstraint": {
+            "excludeShippingAndHandling": "item_subtotal",
+            "includeShippingAndHandling": "grand_total"
+          },
+          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
+        }
+      },
+      "machineEvidenceSeed": {
+        "path": "/Users/rebekah/handbook_web/experiments/independent-exploration/round-53/contract-root/webarena-shopping/references/execution-contract.json",
+        "sha256": "e36a224946fb5907d81d6952177148359148b8d4f052d7cf331c21fca2320ee0",
+        "generatedAt": "2026-08-20T01:30:24.625Z"
       }
     },
     "order-lookup": {
@@ -61,9 +482,444 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/order-lookup/SKILL.md",
       "intentPattern": "\\borders?\\b|purchase (?:history|date)|(?:first|last|recent) purchase|purchase.*\\bdate\\b|bought|shipping method|billing address|arrival|delivery|cancelled|pending|processing",
+      "contextModel": {
+        "capabilityIds": [
+          "inspect-orders"
+        ],
+        "surfaceIds": [
+          "storefront-orders"
+        ],
+        "actionIds": [
+          "orders-inspect-history",
+          "orders-inspect-detail"
+        ],
+        "evidenceIds": [
+          "orders-empty-history",
+          "orders-single-history-detail",
+          "orders-multiple-history-detail"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "large-order-history-pagination",
+            "status": "partially_evidenced",
+            "impact": "Order aggregation is supported for the reviewed collection states; exhaustive large-history behavior remains a later evidence target."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "allowedActions": [
+        "collect_order_history_v1",
+        "read_order_detail_items_v1",
+        "verify_final_state_v1",
+        "submit_answer_evidence_v1"
+      ],
+      "forbiddenActions": [
+        {
+          "kind": "browser.evaluate",
+          "when": "extracting product-list cards",
+          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+        },
+        {
+          "kind": "incremental-card-observation",
+          "when": "product-list selectors are available",
+          "reason": "List pages must be read atomically to prevent drift and repeated observation."
+        }
+      ],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": 1,
+        "customListEvaluateMaxCalls": 0,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "actions": [
+        {
+          "actionId": "collect_order_history_v1",
+          "kind": "browser.runCode",
+          "deterministic": true,
+          "scope": "current-collection-browser-ui",
+          "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "status": {
+                "type": "string",
+                "description": "Exact observed status, case insensitive."
+              },
+              "dateFrom": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD lower bound."
+              },
+              "dateTo": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD upper bound."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
+          "selectors": {
+            "row": "table#my-orders-table.history > tbody > tr",
+            "fields": {
+              "orderNumber": ":scope > td[data-th=\"Order #\"]",
+              "purchaseDate": ":scope > td[data-th=\"Date\"]",
+              "grandTotal": ":scope > td[data-th=\"Order Total\"] .price",
+              "status": ":scope > td[data-th=\"Status\"]",
+              "detailLink": ":scope > td[data-th=\"Actions\"] > a.action.view"
+            },
+            "pagination": {
+              "next": ".pages .pages-item-next > a.action.next",
+              "total": ".toolbar-amount"
+            }
+          },
+          "sourceActionId": "read_order_history_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_order_history_v1\",\"orders\":true,\"selectors\":{\"row\":\"table#my-orders-table.history > tbody > tr\",\"fields\":{\"orderNumber\":\":scope > td[data-th=\\\"Order #\\\"]\",\"purchaseDate\":\":scope > td[data-th=\\\"Date\\\"]\",\"grandTotal\":\":scope > td[data-th=\\\"Order Total\\\"] .price\",\"status\":\":scope > td[data-th=\\\"Status\\\"]\",\"detailLink\":\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
+          "requiredOutput": {
+            "requiredKeys": [
+              "ok",
+              "complete",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "orders",
+              "errors"
+            ],
+            "okWhen": [
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
+            ]
+          }
+        },
+        {
+          "actionId": "read_order_detail_items_v1",
+          "kind": "browser.evaluate",
+          "deterministic": true,
+          "scope": "current-order-detail-page",
+          "maxCallsPerPageId": 2,
+          "selectors": {
+            "row": "table#my-orders-table tbody tr",
+            "fields": {
+              "name": "td.col.name",
+              "sku": "td.col.sku",
+              "price": "td.col.price .price, td.col.price",
+              "qty": "td.col.qty",
+              "subtotal": "td.col.subtotal .price, td.col.subtotal"
+            },
+            "totalsLabel": ".block-order-details-view, .order-info"
+          },
+          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table tbody tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim().replace(/\\s+/g, \" \") || \"\";\n  const items = rows.map(row => ({\n    name: read(row, \"td.col.name\"),\n    sku: read(row, \"td.col.sku\"),\n    price: read(row, \"td.col.price .price, td.col.price\"),\n    qty: read(row, \"td.col.qty\"),\n    subtotal: read(row, \"td.col.subtotal .price, td.col.subtotal\")\n  }));\n  const totals = {};\n  for (const tr of document.querySelectorAll(\"table#my-orders-table tfoot tr\")) {\n    const label = tr.querySelector(\"th, td[data-th]\");\n    const value = tr.querySelector(\"td.amount .price, .price\");\n    if (label && value) totals[(label.getAttribute(\"data-th\") || label.textContent.trim()).trim()] = value.textContent.trim();\n  }\n  const orderDate = document.querySelector(\".order-date > span:not(.label)\")?.textContent.trim() || \"\";\n  if (!rows.length) errors.push(\"order-detail-items-empty-or-selector-mismatch\");\n  const completeItem = item => Boolean(item.name && item.sku && item.subtotal);\n  if (items.some(item => !completeItem(item))) errors.push(\"required-item-field-missing\");\n  return {\n    actionId: \"read_order_detail_items_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    orderDate,\n    totals,\n    itemCount: items.length,\n    items: items.map(item => ({ ...item, evidenceStatus: completeItem(item) ? \"verified\" : \"evidence_incomplete\" })),\n    errors\n  };\n}",
+          "requiredOutput": {
+            "actionId": "read_order_detail_items_v1",
+            "requiredKeys": [
+              "ok",
+              "evidenceStatus",
+              "pageId",
+              "orderDate",
+              "totals",
+              "itemCount",
+              "items",
+              "errors"
+            ],
+            "itemKeys": [
+              "name",
+              "sku",
+              "price",
+              "qty",
+              "subtotal",
+              "evidenceStatus"
+            ],
+            "okWhen": [
+              "errors is empty",
+              "itemCount equals items.length",
+              "each item has name, sku and item subtotal"
+            ]
+          }
+        },
+        {
+          "actionId": "submit_answer_evidence_v1",
+          "kind": "evidence.submit",
+          "deterministic": true,
+          "scope": "current-run-answer",
+          "maxCallsPerPageId": 1,
+          "requiredInput": {
+            "requiredKeys": [
+              "evidenceStatus",
+              "result",
+              "evidenceRecordIds",
+              "filters",
+              "ledger"
+            ],
+            "evidenceStatus": "verified",
+            "evidenceRecordIdsMinItems": 1
+          }
+        }
+      ],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "submitActionId": "submit_answer_evidence_v1",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "order-lookup",
+          "intentPattern": "\\borders?\\b|purchase (?:history|date)|(?:first|last|recent) purchase|purchase.*\\bdate\\b|bought|shipping method|billing address|arrival|delivery|cancelled|pending|processing",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "order-lookup",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "collect_order_history_v1",
+          "read_order_detail_items_v1",
+          "verify_final_state_v1",
+          "submit_answer_evidence_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "order-lookup",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        },
+        "selectionContract": {
+          "entity": "order_set",
+          "preserveTaskConstraints": [
+            "exact_date",
+            "product_category",
+            "status"
+          ],
+          "detailEvidenceRequired": true,
+          "categoryMatch": "品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入",
+          "amountFieldByConstraint": {
+            "excludeShippingAndHandling": "item_subtotal",
+            "includeShippingAndHandling": "grand_total"
+          },
+          "aggregation": "sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"
+        }
+      },
+      "machineEvidenceSeed": {
+        "path": "/Users/rebekah/handbook_web/experiments/independent-exploration/round-53/contract-root/webarena-shopping/references/execution-contract.json",
+        "sha256": "e36a224946fb5907d81d6952177148359148b8d4f052d7cf331c21fca2320ee0",
+        "generatedAt": "2026-08-20T01:30:24.625Z"
+      }
+    },
+    "checkout": {
+      "workflow": "checkout",
+      "title": "购买与结账",
+      "siteKeys": [
+        "shopping"
+      ],
+      "origin": "http://localhost:7770",
+      "skillFile": "runtime-skills/checkout/SKILL.md",
+      "intentPattern": "buy|purchase .*product|checkout|place .*order|payment|shipping address",
+      "contextModel": {
+        "capabilityIds": [
+          "submit-purchase"
+        ],
+        "surfaceIds": [
+          "storefront-cart-checkout"
+        ],
+        "actionIds": [
+          "checkout-prepare",
+          "checkout-submit-order"
+        ],
+        "evidenceIds": [
+          "checkout-payment-ready",
+          "checkout-order-confirmed"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -71,12 +927,40 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -89,11 +973,315 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "checkout",
+          "intentPattern": "buy|purchase .*product|checkout|place .*order|payment|shipping address",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "checkout",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "checkout",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
+        }
+      }
+    },
+    "cart-lists": {
+      "workflow": "cart-lists",
+      "title": "购物车、愿望单与比较",
+      "siteKeys": [
+        "shopping"
+      ],
+      "origin": "http://localhost:7770",
+      "skillFile": "runtime-skills/cart-lists/SKILL.md",
+      "intentPattern": "cart|wishlist|wish list|compare|add .*item|remove .*item|quantity",
+      "contextModel": {
+        "capabilityIds": [
+          "manage-cart"
+        ],
+        "surfaceIds": [
+          "storefront-cart-checkout"
+        ],
+        "actionIds": [
+          "cart-add-product"
+        ],
+        "evidenceIds": [
+          "cart-add-and-nonempty"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "empty-cart-state",
+            "status": "not_evidenced",
+            "impact": "Cart capability is limited to the evidenced nonempty state."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "cart-lists",
+          "intentPattern": "cart|wishlist|wish list|compare|add .*item|remove .*item|quantity",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "cart-lists",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "cart-lists",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
+        }
       }
     },
     "reviews": {
@@ -105,9 +1293,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/reviews/SKILL.md",
       "intentPattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -115,7 +1327,13 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -133,11 +1351,157 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "reviews",
+          "intentPattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "reviews",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "reviews",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "account-forms": {
@@ -149,9 +1513,43 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/account-forms/SKILL.md",
       "intentPattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
+      "contextModel": {
+        "capabilityIds": [
+          "establish-account"
+        ],
+        "surfaceIds": [
+          "storefront-account"
+        ],
+        "actionIds": [
+          "account-create",
+          "account-access"
+        ],
+        "evidenceIds": [
+          "account-registration-authenticated",
+          "account-existing-session"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -159,7 +1557,215 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
+        "customListEvaluateMaxCalls": null,
+        "supplementalQueriesMax": 0,
+        "supplementalQueryAllowedOnlyWhen": null,
+        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
+        "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
+      },
+      "actions": [],
+      "finalStateGate": {
+        "actionId": "verify_final_state_v1",
+        "kind": "cdp.readCurrentPageState",
+        "requiredBefore": "SUCCESS",
+        "requiredFields": [
+          "url",
+          "title",
+          "h1OrTargetObjectText"
+        ],
+        "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+          "The current page title or target object text must prove the requested object identity.",
+          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+        ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "account-forms",
+          "intentPattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "account-forms",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "account-forms",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
+        }
+      }
+    },
+    "category-navigation": {
+      "workflow": "category-navigation",
+      "title": "分类页导航与价格过滤",
+      "siteKeys": [
+        "shopping"
+      ],
+      "origin": "http://localhost:7770",
+      "skillFile": "runtime-skills/category-navigation/SKILL.md",
+      "intentPattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
+      "contextModel": {
+        "capabilityIds": [
+          "browse-catalog"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-browse-category",
+          "catalog-advance-results"
+        ],
+        "evidenceIds": [
+          "catalog-home-category-pagination"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
+      "enforcement": {
+        "mode": "runtime",
+        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
+      "allowedActions": [
+        "verify_final_state_v1"
+      ],
+      "forbiddenActions": [],
+      "budgets": {
+        "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
+        "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -177,116 +1783,211 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
-      }
-    },
-    "category-navigation": {
-      "workflow": "category-navigation",
-      "title": "分类页导航与价格过滤",
-      "siteKeys": [
-        "shopping"
-      ],
-      "origin": "http://localhost:7770",
-      "skillFile": "runtime-skills/category-navigation/SKILL.md",
-      "intentPattern": "open .*category page|category page.*filtered|browse products",
-      "enforcement": {
-        "mode": "runtime",
-        "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
-      "allowedActions": [
-        "read_current_list_page_v1",
-        "verify_final_state_v1"
-      ],
-      "forbiddenActions": [
-        {
-          "kind": "browser.evaluate",
-          "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
-        },
-        {
-          "kind": "incremental-card-observation",
-          "when": "product-list selectors are available",
-          "reason": "List pages must be read atomically to prevent drift and repeated observation."
-        }
-      ],
-      "budgets": {
-        "finalStateGateRequiredBeforeSuccess": true,
-        "listReadMaxCallsPerPageId": 1,
-        "customListEvaluateMaxCalls": 0,
-        "supplementalQueriesMax": 0,
-        "supplementalQueryAllowedOnlyWhen": null,
-        "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
-        "broadCategoryDetoursForBrandFilterMax": null
-      },
-      "actions": [
-        {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
-          "deterministic": true,
-          "scope": "current-list-page",
-          "maxCallsPerPageId": 1,
-          "selectors": {
-            "item": "li.product-item",
-            "fields": {
-              "name": "a.product-item-link",
-              "price": ".price-box .price",
-              "link": "a.product-item-link"
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
             },
-            "pagination": {
-              "next": ".pages .pages-item-next > a.action.next",
-              "limiter": "select[data-role='limiter']",
-              "total": ".toolbar-amount"
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
             }
-          },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
-          "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
-            "requiredKeys": [
-              "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
-              "complete",
-              "currentLimiterValue",
-              "limiterOptions",
-              "errors"
-            ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
-            "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "category-navigation",
+          "intentPattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "category_page",
+          "identity": "task-category",
+          "desiredState": "category_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
             ]
           }
-        }
-      ],
-      "finalStateGate": {
-        "actionId": "verify_final_state_v1",
-        "kind": "cdp.readCurrentPageState",
-        "requiredBefore": "SUCCESS",
-        "requiredFields": [
-          "url",
-          "title",
-          "h1OrTargetObjectText"
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/clothing-shoes-jewelry/men/shoes.html",
+              "label": "clothing shoes jewelry > men > shoes",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/clothing-shoes-jewelry/women/clothing.html",
+              "label": "clothing shoes jewelry > women > clothing",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/office-products/office-furniture-lighting/cabinets-racks-shelves.html",
+              "label": "office products > office furniture lighting > cabinets racks shelves",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/clothing-shoes-jewelry/women/shoes.html",
+              "label": "clothing shoes jewelry > women > shoes",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/makeup/makeup-remover.html",
+              "label": "beauty personal care > makeup > makeup remover",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/oral-care/children-s-dental-care.html",
+              "label": "beauty personal care > oral care > children s dental care",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
         ],
-        "assertions": [
-          "The current URL must match the selected candidate URL for NAVIGATE tasks.",
-          "The current page title or target object text must prove the requested object identity.",
-          "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
-          "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
-        ]
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "category_page",
+            "identity": "task-category",
+            "desiredState": "category_open"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "catalog-aggregation": {
@@ -298,19 +1999,53 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/catalog-aggregation/SKILL.md",
       "intentPattern": "price range|full names|available models|products from",
+      "contextModel": {
+        "capabilityIds": [
+          "browse-catalog"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-browse-category",
+          "catalog-advance-results"
+        ],
+        "evidenceIds": [
+          "catalog-home-category-pagination"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "collect_product_pages_v1",
+        "submit_answer_evidence_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
         {
           "kind": "browser.evaluate",
           "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+          "reason": "Use collect_product_pages_v1 exactly once per pageId."
         },
         {
           "kind": "incremental-card-observation",
@@ -320,20 +2055,46 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": 2,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
+        "runtimeDistinctQueriesMax": 2,
+        "runtimeContractActionsMax": 3,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
-        "supplementalQueryAllowedOnlyWhen": "zero accepted candidates satisfy target product type in the frozen primary result set",
+        "supplementalQueryAllowedOnlyWhen": "the task requires a complete aggregate or extrema and the primary storefront-search result cannot prove semantic recall closure; the supplemental query must replace only the product-type term with one direct lexical synonym while preserving brand and all hard constraints",
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": 0
       },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_product_pages_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2,
+                "default": 2
+              },
+              "nameContains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "item": "li.product-item",
             "fields": {
@@ -347,33 +2108,41 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "sourceActionId": "read_current_list_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_product_pages_v1\",\"orders\":false,\"selectors\":{\"item\":\"li.product-item\",\"fields\":{\"name\":\"a.product-item-link\",\"price\":\".price-box .price\",\"link\":\"a.product-item-link\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"limiter\":\"select[data-role='limiter']\",\"total\":\".toolbar-amount\"}},\"maxPages\":2})",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
             "requiredKeys": [
               "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "items",
               "errors"
             ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
+          }
+        },
+        {
+          "actionId": "submit_answer_evidence_v1",
+          "kind": "evidence.submit",
+          "deterministic": true,
+          "scope": "current-run-answer",
+          "maxCallsPerPageId": 1,
+          "requiredInput": {
+            "requiredKeys": [
+              "evidenceStatus",
+              "result",
+              "evidenceRecordIds",
+              "filters",
+              "ledger"
+            ],
+            "evidenceStatus": "verified",
+            "evidenceRecordIdsMinItems": 1
           }
         }
       ],
@@ -387,11 +2156,214 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "submitActionId": "submit_answer_evidence_v1",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "catalog-aggregation",
+          "intentPattern": "price range|full names|available models|products from",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "catalog-aggregation",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/electronics/headphones/earbud-headphones.html",
+              "label": "electronics > headphones > earbud headphones",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/oral-care/teeth-whitening.html",
+              "label": "beauty personal care > oral care > teeth whitening",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/office-products/office-electronics/printers-accessories.html",
+              "label": "office products > office electronics > printers accessories",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/hair-care/styling-products.html",
+              "label": "beauty personal care > hair care > styling products",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/electronics/headphones.html",
+              "label": "electronics > headphones",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/oral-care/children-s-dental-care.html",
+              "label": "beauty personal care > oral care > children s dental care",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "collect_product_pages_v1",
+          "submit_answer_evidence_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "catalog-aggregation",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "product-selection": {
@@ -403,19 +2375,51 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/product-selection/SKILL.md",
       "intentPattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
+      "contextModel": {
+        "capabilityIds": [
+          "inspect-product"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-inspect-product"
+        ],
+        "evidenceIds": [
+          "catalog-product-detail-review-surface"
+        ],
+        "supportStatus": "supported",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "collect_product_pages_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
         {
           "kind": "browser.evaluate",
           "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+          "reason": "Use collect_product_pages_v1 exactly once per pageId."
         },
         {
           "kind": "incremental-card-observation",
@@ -425,7 +2429,13 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
+        "runtimeDistinctQueriesMax": 2,
+        "runtimeContractActionsMax": 2,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
         "supplementalQueryAllowedOnlyWhen": "zero accepted candidates satisfy target product type in the frozen primary result set",
@@ -434,11 +2444,31 @@
       },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_product_pages_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "nameContains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "item": "li.product-item",
             "fields": {
@@ -452,32 +2482,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "sourceActionId": "read_current_list_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_product_pages_v1\",\"orders\":false,\"selectors\":{\"item\":\"li.product-item\",\"fields\":{\"name\":\"a.product-item-link\",\"price\":\".price-box .price\",\"link\":\"a.product-item-link\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"limiter\":\"select[data-role='limiter']\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
             "requiredKeys": [
               "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "items",
               "errors"
             ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         }
@@ -492,11 +2512,194 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "product-selection",
+          "intentPattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "product",
+          "identity": "task-selected-product",
+          "desiredState": "product_detail_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/video-games/nintendo-switch.html",
+              "label": "video games > nintendo switch",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/clothing-shoes-jewelry/men/shoes.html",
+              "label": "clothing shoes jewelry > men > shoes",
+              "terms": {},
+              "leafTerms": {}
+            },
+            {
+              "path": "/beauty-personal-care/hair-care/styling-products.html",
+              "label": "beauty personal care > hair care > styling products",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "collect_product_pages_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "product",
+            "identity": "task-selected-product",
+            "desiredState": "product_detail_open"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "search-discovery": {
@@ -508,19 +2711,57 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/search-discovery/SKILL.md",
       "intentPattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
+      "contextModel": {
+        "capabilityIds": [
+          "search-products"
+        ],
+        "surfaceIds": [
+          "storefront-catalog"
+        ],
+        "actionIds": [
+          "catalog-search-products"
+        ],
+        "evidenceIds": [
+          "catalog-search-results"
+        ],
+        "supportStatus": "supported",
+        "limitations": [
+          {
+            "id": "empty-search-state",
+            "status": "not_evidenced",
+            "impact": "No reusable empty-result behavior is asserted."
+          }
+        ],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
       },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
+      },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "collect_product_pages_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
         {
           "kind": "browser.evaluate",
           "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+          "reason": "Use collect_product_pages_v1 exactly once per pageId."
         },
         {
           "kind": "incremental-card-observation",
@@ -530,7 +2771,13 @@
       ],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
+        "runtimeDistinctQueriesMax": 1,
+        "runtimeContractActionsMax": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -539,11 +2786,31 @@
       },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_product_pages_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "nameContains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "item": "li.product-item",
             "fields": {
@@ -557,32 +2824,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "sourceActionId": "read_current_list_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_product_pages_v1\",\"orders\":false,\"selectors\":{\"item\":\"li.product-item\",\"fields\":{\"name\":\"a.product-item-link\",\"price\":\".price-box .price\",\"link\":\"a.product-item-link\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"limiter\":\"select[data-role='limiter']\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
             "requiredKeys": [
               "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "items",
               "errors"
             ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         }
@@ -597,11 +2854,175 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "search-discovery",
+          "intentPattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "search-discovery",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [
+            {
+              "id": "product-list",
+              "itemSelector": "li.product-item",
+              "itemCount": 12,
+              "fields": {
+                "name": "a.product-item-link",
+                "price": ".price-box .price",
+                "link": "a.product-item-link"
+              }
+            },
+            {
+              "id": "pagination",
+              "nextSelector": ".pages .pages-item-next > a.action.next",
+              "limiterSelector": "select[data-role='limiter']",
+              "totalSelector": ".toolbar-amount"
+            }
+          ],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "collect_product_pages_v1",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "search-discovery",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "read-content": {
@@ -613,9 +3034,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/read-content/SKILL.md",
       "intentPattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -623,7 +3068,13 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -641,11 +3092,157 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "read-content",
+          "intentPattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "read-content",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "read-content",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "edit-submit": {
@@ -657,9 +3254,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/edit-submit/SKILL.md",
       "intentPattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -667,12 +3288,40 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": null
+      },
+      "mutation": {
+        "kind": "browser.mutate",
+        "phases": [
+          "identify-target",
+          "fill-and-verify",
+          "submit-once",
+          "verify-result"
+        ],
+        "submitMaxCalls": 1,
+        "requireExactTaskValues": true,
+        "requireCurrentFormAction": true,
+        "requirePostSubmitRead": true,
+        "requireNetworkMutationEvent": false,
+        "networkEventExcludePathPatterns": [
+          "^/(?:login(?:_check)?|logout|registration)(?:/|$)"
+        ],
+        "compoundTaskRequiresAllPhases": true,
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "contractCoverage": "adapter_evidence_required",
+        "forms": []
       },
       "actions": [],
       "finalStateGate": {
@@ -685,11 +3334,108 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "not_applicable"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "edit-submit",
+          "intentPattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "edit-submit",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "browser.mutate",
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "edit-submit",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "correct_target_mutation",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "not_applicable"
+        }
       }
     },
     "navigation": {
@@ -701,9 +3447,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/navigation/SKILL.md",
       "intentPattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -711,7 +3481,13 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -729,11 +3505,164 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "navigation",
+          "intentPattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "page",
+          "identity": "task-target-page",
+          "desiredState": "page_open"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [
+            {
+              "path": "/beauty-personal-care/hair-care/styling-products.html",
+              "label": "beauty personal care > hair care > styling products",
+              "terms": {},
+              "leafTerms": {}
+            }
+          ],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "page",
+            "identity": "task-target-page",
+            "desiredState": "page_open"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     },
     "other": {
@@ -745,9 +3674,33 @@
       "origin": "http://localhost:7770",
       "skillFile": "runtime-skills/other/SKILL.md",
       "intentPattern": ".*",
+      "contextModel": {
+        "capabilityIds": [],
+        "surfaceIds": [],
+        "actionIds": [],
+        "evidenceIds": [],
+        "supportStatus": "fallback",
+        "limitations": [],
+        "fallbackOnUnsupported": true
+      },
       "enforcement": {
         "mode": "runtime",
         "policy": "Runtime must enforce this JSON contract; Markdown handbook text is explanatory only."
+      },
+      "responseContract": {
+        "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+        "onNotFound": {
+          "status": "NOT_FOUND_ERROR",
+          "retrievedData": null,
+          "forbiddenRetrievedData": [
+            "empty_array",
+            "zero_array"
+          ]
+        },
+        "onSuccess": {
+          "status": "SUCCESS",
+          "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+        }
       },
       "allowedActions": [
         "verify_final_state_v1"
@@ -755,7 +3708,13 @@
       "forbiddenActions": [],
       "budgets": {
         "finalStateGateRequiredBeforeSuccess": true,
+        "maxConsecutiveSameAction": 2,
+        "recoveryAttemptsMax": 2,
+        "maxListPages": null,
+        "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -773,12 +3732,159 @@
           "h1OrTargetObjectText"
         ],
         "assertions": [
+          "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
           "The current URL must match the selected candidate URL for NAVIGATE tasks.",
           "The current page title or target object text must prove the requested object identity.",
           "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+          "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
           "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
         ]
+      },
+      "answerEvidenceGate": {
+        "requiredBefore": "SUCCESS",
+        "mode": "verifyAnswerEvidence",
+        "enforcement": "observe",
+        "responseField": "evidence_ledger",
+        "requiredFields": [
+          "evidenceStatus",
+          "result",
+          "evidenceRecordIds",
+          "filters",
+          "ledger"
+        ],
+        "submissionSchema": {
+          "type": "object",
+          "required": [
+            "retrieved_data",
+            "evidence_ledger"
+          ],
+          "properties": {
+            "retrieved_data": {
+              "description": "Benchmark answer in the task response schema."
+            },
+            "evidence_ledger": {
+              "type": "object",
+              "required": [
+                "evidenceStatus",
+                "result",
+                "evidenceRecordIds",
+                "filters",
+                "ledger"
+              ],
+              "properties": {
+                "evidenceStatus": {
+                  "const": "verified"
+                },
+                "result": {
+                  "description": "Must equal retrieved_data after removing its outer one-item array."
+                },
+                "evidenceRecordIds": {
+                  "type": "array",
+                  "minItems": 1
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "ledger": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "failureAction": "reject_success_or_fallback"
+      },
+      "ir": {
+        "schemaVersion": 2,
+        "route": {
+          "workflow": "other",
+          "intentPattern": ".*",
+          "siteKeys": [
+            "shopping"
+          ],
+          "origin": "http://localhost:7770"
+        },
+        "target": {
+          "entity": "other",
+          "identity": "task-target",
+          "desiredState": "task-success"
+        },
+        "preconditions": [
+          "site_origin_matches",
+          "task_values_preserved"
+        ],
+        "observation": {
+          "currentState": {
+            "source": "browser.page",
+            "required": true,
+            "fields": [
+              "url",
+              "title",
+              "targetObjectText"
+            ]
+          }
+        },
+        "page": {
+          "routeHints": [],
+          "structures": [],
+          "forms": [],
+          "visualAnchors": []
+        },
+        "allowedActions": [
+          "verify_final_state_v1"
+        ],
+        "requiredNetworkEvents": [],
+        "expectedMutation": null,
+        "postStateGate": {
+          "lifecycleGate": {
+            "actionId": "verify_final_state_v1",
+            "kind": "cdp.readCurrentPageState",
+            "requiredBefore": "SUCCESS",
+            "requiredFields": [
+              "url",
+              "title",
+              "h1OrTargetObjectText"
+            ],
+            "assertions": [
+              "A login or sign-in page is never a successful final state unless the task explicitly requests authentication.",
+              "The current URL must match the selected candidate URL for NAVIGATE tasks.",
+              "The current page title or target object text must prove the requested object identity.",
+              "RETRIEVE answers must be supported by the current page state or an accepted evidence ledger.",
+              "If the answer is numeric or aggregated, an evidence ledger must identify every selected detail row and reproduce the answer with the declared amount field and filters.",
+              "If the spoken candidate and current URL disagree, navigate to the candidate and rerun this gate."
+            ]
+          },
+          "targetGate": {
+            "entity": "other",
+            "identity": "task-target",
+            "desiredState": "task-success"
+          }
+        },
+        "responseContract": {
+          "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+          "onNotFound": {
+            "status": "NOT_FOUND_ERROR",
+            "retrievedData": null,
+            "forbiddenRetrievedData": [
+              "empty_array",
+              "zero_array"
+            ]
+          },
+          "onSuccess": {
+            "status": "SUCCESS",
+            "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+          }
+        },
+        "successContract": {
+          "requiredStatus": "SUCCESS",
+          "lifecycleGate": "verify_final_state_v1",
+          "targetGate": "target_identity_verified",
+          "mutationGate": "not_applicable",
+          "postStateGate": "post_state_verified",
+          "answerEvidenceGate": "observe_answer_evidence_reproducibility"
+        }
       }
     }
-  }
+  },
+  "sequences": {}
 }

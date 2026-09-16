@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-account",
+  "states": [
+    {"id": "account-registration-completed", "observation_ids": ["account-registration-complete"]},
+    {"id": "account-authenticated-state", "observation_ids": ["account-authenticated"]}
+  ],
+  "transitions": [
+    {"from_state": "account-registration-completed", "action_id": "account-access", "to_state": "account-authenticated-state", "stop_conditions": ["Account information is available."], "failure_conditions": ["The account state cannot be accessed."], "unknown_conditions": ["Session expiry was not independently exercised."], "pagination_or_sort_state": ["No collection ordering applies to this transition."]},
+    {"from_state": "account-registration-completed", "action_id": "account-create", "to_state": "account-authenticated-state", "stop_conditions": ["The new account is authenticated."], "failure_conditions": ["Account creation is rejected or does not establish authentication."], "unknown_conditions": ["Invalid input variants were not independently exercised."], "pagination_or_sort_state": ["No collection ordering applies to account creation."]}
+  ]
+}

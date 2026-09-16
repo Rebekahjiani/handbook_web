@@ -1,0 +1,40 @@
+{
+  "experiment": "webarena-shopping-skill-generator-20260903-budget-stop",
+  "created_at": "2026-09-03",
+  "task_ids": [282, 228, 332, 141],
+  "group": "baselineB_skill_routed",
+  "contract_audit_mode": "enforce",
+  "runner_timeout_seconds": 0,
+  "purpose": "Verify that budget-exhaustion stopping rule in catalog-aggregation SKILL.md causes agent to terminate after budget rejection instead of continuing with ordinary browser calls.",
+  "candidate_change": {
+    "file": "generate-web-handbook/scripts/task-workflows.mjs",
+    "section": "catalog-aggregation hardExecContract",
+    "rule_added": "budget 耗尽停止（机器状态）: on contract_action_rejected: workflow browser.evaluate budget exceeded or contract-action budget exceeded → immediately stop all browser exploration → one no-tool final answer if ledger supports it, else NOT_FOUND_ERROR; infrastructure errors exempt",
+    "generator_sha": "141561c71e6bb2b41d8b3200b1aaf132955fcef94eee554a287e44c0120ab47a"
+  },
+  "frozen_inputs": {
+    "artifacttrace_head": "736596e425b60bf5de15864790d30a84e89863ac",
+    "handbook_head": "448d9fa961c32d1a37ccf81df7ec06f595ad7c62",
+    "catalog_skill_sha256_before": "3a3661ee4865e948ea2281737f29ba67334a822e274ed13111f2eca17645cccd",
+    "catalog_skill_sha256_after": "4bbe35e12f0a43e03d799e2108c53fc5a367d7329719d490de60a3ba5ff30685",
+    "execution_contract_sha256": "7a5a3889b7084de3027ae332595d80feef941bef01e20310d7336f9f951b0eed"
+  },
+  "test_evidence": {
+    "npm_test_before": "335 checks passed",
+    "npm_test_after": "335 checks + 5 new budget-stop checks = passed",
+    "rust_contract_action": "3/3 passed",
+    "reverse_verification": {
+      "broken": "AssertionError: catalog-aggregation SKILL.md must contain budget-exceeded rejection signal",
+      "restored": "generator tests passed"
+    }
+  },
+  "promotion_criteria": {
+    "task_282": "agent terminates after budget rejection, produces final answer or NOT_FOUND_ERROR; score improves from 0",
+    "task_228": "score remains 1 (catalog success kept)",
+    "task_332": "score remains 1 (order-aggregation fix kept)",
+    "task_141": "score remains 1 (pilot positive flip kept)",
+    "negative_flips": 0,
+    "contract_violations": 0
+  },
+  "server_output_root": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-20260903-budget-stop"
+}

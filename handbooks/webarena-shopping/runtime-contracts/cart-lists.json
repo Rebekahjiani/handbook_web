@@ -1,0 +1,58 @@
+{
+  "workflow": "cart-lists",
+  "routeHints": [],
+  "target": {
+    "entity": "cart-lists",
+    "identity": "task-target",
+    "desiredState": "task-success"
+  },
+  "contextModel": {
+    "capabilityIds": [
+      "manage-cart"
+    ],
+    "surfaceIds": [
+      "storefront-cart-checkout"
+    ],
+    "actionIds": [
+      "cart-add-product"
+    ],
+    "evidenceIds": [
+      "cart-add-and-nonempty"
+    ],
+    "supportStatus": "supported",
+    "limitations": [
+      {
+        "id": "empty-cart-state",
+        "status": "not_evidenced",
+        "impact": "Cart capability is limited to the evidenced nonempty state."
+      }
+    ],
+    "fallbackOnUnsupported": true
+  },
+  "allowedActions": [
+    "verify_final_state_v1"
+  ],
+  "stopConditions": [
+    "target identity and desired state verified",
+    "required evidence unavailable: stop without SUCCESS"
+  ],
+  "answerEvidenceGate": {
+    "requiredBefore": "SUCCESS",
+    "mode": "not_applicable"
+  },
+  "responseContract": {
+    "expectedStatusSource": "task.eval.AgentResponseEvaluator.expected.status",
+    "onNotFound": {
+      "status": "NOT_FOUND_ERROR",
+      "retrievedData": null,
+      "forbiddenRetrievedData": [
+        "empty_array",
+        "zero_array"
+      ]
+    },
+    "onSuccess": {
+      "status": "SUCCESS",
+      "retrievedDataSchemaSource": "task.eval.AgentResponseEvaluator.results_schema"
+    }
+  }
+}

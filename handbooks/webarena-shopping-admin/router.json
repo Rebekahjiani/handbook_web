@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "router": "use-webarena-shopping-admin-router",
+  "site": {
+    "key": "shopping_admin",
+    "name": "webarena-shopping-admin",
+    "origin": "http://localhost:7780"
+  },
+  "routes": [
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "admin-report",
+      "priority": 0,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "best.?selling|top.?\\d|revenue|total.*sold|items? sold|sales.*report|best.*brand|best.*product type",
+      "skill_file": "runtime-skills/admin-report/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "admin-report",
+      "reason": "销售报表与聚合统计"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "admin-product-edit",
+      "priority": 1,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "(?:reduce|increase)\\s+(?:the\\s+)?price|(?:disable|enable)\\s+\\w|mark\\s+all\\s+\\w|(?:update|change|set)\\s+(?:the\\s+|all\\s+)?(?:\\w+\\s+)*(?:price|description|stock|out.?of.?stock|status|on.?sale|attribute|SKU)|set.*on.?sale",
+      "skill_file": "runtime-skills/admin-product-edit/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "admin-product-edit",
+      "reason": "商品属性编辑与状态管理"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "admin-customer",
+      "priority": 2,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "customer(?:\\s+\\w+){0,3}\\s+(?:email|name|group|address|account)|(?:list|view|return|get)\\s+(?:all\\s+)?customers?(?:\\s|$)|view.*details.*(?:all\\s+)?customers?",
+      "skill_file": "runtime-skills/admin-customer/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "admin-customer",
+      "reason": "客户信息查询与管理"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "read-content",
+      "priority": 3,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:get|return|list|show|summarize|what(?:'s| is)|how many|find out|read|retrieve|give me)\\b",
+      "skill_file": "runtime-skills/read-content/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "read-content",
+      "reason": "读取列表、详情与结构化数据"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "edit-submit",
+      "priority": 4,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+      "skill_file": "runtime-skills/edit-submit/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "edit-submit",
+      "reason": "创建、修改与提交"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "navigation",
+      "priority": 5,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+      "skill_file": "runtime-skills/navigation/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "navigation",
+      "reason": "页面导航"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "other",
+      "priority": 6,
+      "backoff": false,
+      "fallback": true,
+      "intent_pattern": ".*",
+      "skill_file": "runtime-skills/other/SKILL.md",
+      "contract_file": "references/execution-contract.json",
+      "contract_workflow": "other",
+      "reason": "未归类任务"
+    }
+  ],
+  "sequences": []
+}

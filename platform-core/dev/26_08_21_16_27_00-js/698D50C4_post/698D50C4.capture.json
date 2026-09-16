@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-08-21T08:30:16.016Z",
+  "url": "http://localhost:7770/customer/account",
+  "title": "My Account",
+  "cdpPort": 9222,
+  "basename": "698D50C4",
+  "outputs": {
+    "screenshot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_27_00-js/698D50C4_post/698D50C4.png",
+    "html": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_27_00-js/698D50C4_post/698D50C4.html",
+    "accessibilitySnapshot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_27_00-js/698D50C4_post/698D50C4.accessibility.json"
+  }
+}

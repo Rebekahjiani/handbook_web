@@ -1,0 +1,146 @@
+{
+  "label": "storefront",
+  "runRoot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_51_26-js",
+  "writtenAt": "2026-08-21T08:54:39.053Z",
+  "steps": [
+    {
+      "index": 1,
+      "ts": "2026-08-21T08:51:27.152Z",
+      "name": "open_home",
+      "ok": true,
+      "url": "http://localhost:7770/",
+      "screenshot": "driver-screenshots/001-open-home.png"
+    },
+    {
+      "index": 2,
+      "ts": "2026-08-21T08:51:30.614Z",
+      "name": "category_browse",
+      "ok": true,
+      "url": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "categoryUrl": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "title": "Beauty & Personal Care",
+      "screenshot": "driver-screenshots/002-category-browse.png"
+    },
+    {
+      "index": 3,
+      "ts": "2026-08-21T08:51:35.442Z",
+      "name": "product_detail",
+      "ok": true,
+      "url": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "title": "Beauty & Personal Care",
+      "price": "$224.76",
+      "reviews": "no-reviews",
+      "screenshot": "driver-screenshots/003-product-detail.png"
+    },
+    {
+      "index": 4,
+      "ts": "2026-08-21T08:52:07.589Z",
+      "name": "search_discovery",
+      "ok": true,
+      "url": "http://localhost:7770/anime-girls-phone-case-nezuko-phone-case-anime-phone-case-for-iphone-12-compatible-from-iphone-7-series-to-13-series-cases-comes-with-a-keychain-mdz-12.html",
+      "term": "phone case",
+      "results": 60,
+      "screenshot": "driver-screenshots/004-search-discovery.png"
+    },
+    {
+      "index": 5,
+      "ts": "2026-08-21T08:52:11.108Z",
+      "name": "product_detail_2",
+      "ok": true,
+      "url": "http://localhost:7770/anime-girls-phone-case-nezuko-phone-case-anime-phone-case-for-iphone-12-compatible-from-iphone-7-series-to-13-series-cases-comes-with-a-keychain-mdz-12.html",
+      "title": "Anime Girls Phone Case, Nezuko Phone Case, Anime Phone Case for iPhone 12, Compatible from iPhone 7 Series to 13 Series Cases, Comes with a Keychain(MDZ,12)",
+      "price": "$14.99",
+      "reviews": "has-reviews",
+      "screenshot": "driver-screenshots/005-product-detail-2.png"
+    },
+    {
+      "index": 6,
+      "ts": "2026-08-21T08:52:43.118Z",
+      "name": "login_ensure",
+      "ok": true,
+      "url": "http://localhost:7770/customer/account",
+      "loggedIn": true,
+      "method": "already",
+      "accountEmail": "wa.tracer.agg.1787302127232@example.com",
+      "screenshot": "driver-screenshots/006-login-ensure.png"
+    },
+    {
+      "index": 7,
+      "ts": "2026-08-21T08:52:45.432Z",
+      "name": "configurable_select",
+      "ok": true,
+      "url": "http://localhost:7770/anime-girls-phone-case-nezuko-phone-case-anime-phone-case-for-iphone-12-compatible-from-iphone-7-series-to-13-series-cases-comes-with-a-keychain-mdz-12.html",
+      "configurable": false,
+      "screenshot": "driver-screenshots/007-configurable-select.png"
+    },
+    {
+      "index": 8,
+      "ts": "2026-08-21T08:53:29.824Z",
+      "name": "add_to_cart",
+      "ok": true,
+      "url": "http://localhost:7770/tweezers-for-succulents-duo.html",
+      "added": true,
+      "attempts": 1,
+      "product": "Tweezers For Succulents Duo",
+      "screenshot": "driver-screenshots/008-add-to-cart.png"
+    },
+    {
+      "index": 9,
+      "ts": "2026-08-21T08:53:34.137Z",
+      "name": "cart_view",
+      "ok": true,
+      "url": "http://localhost:7770/checkout/cart",
+      "emptyCart": false,
+      "screenshot": "driver-screenshots/009-cart-view.png"
+    },
+    {
+      "index": 10,
+      "ts": "2026-08-21T08:53:36.246Z",
+      "name": "checkout",
+      "ok": true,
+      "url": "http://localhost:7770/checkout/onepage/success/",
+      "placed": true,
+      "success": true,
+      "screenshot": "driver-screenshots/010-checkout.png"
+    },
+    {
+      "index": 11,
+      "ts": "2026-08-21T08:54:31.210Z",
+      "name": "order_history",
+      "ok": true,
+      "url": "http://localhost:7770/sales/order/view/order_id/191/",
+      "orderRows": 1,
+      "screenshot": "driver-screenshots/011-order-history.png"
+    },
+    {
+      "index": 12,
+      "ts": "2026-08-21T08:54:34.803Z",
+      "name": "account_page",
+      "ok": true,
+      "url": "http://localhost:7770/customer/account",
+      "screenshot": "driver-screenshots/012-account-page.png"
+    }
+  ],
+  "okSteps": 12,
+  "totalSteps": 12,
+  "pageName": "webarena_shopping",
+  "site": "http://localhost:7770",
+  "adminSite": "http://localhost:7780",
+  "preset": "js",
+  "orderPlaced": true,
+  "accountEmail": "wa.tracer.agg.1787302127232@example.com",
+  "profiles": [
+    {
+      "profileId": "752d5829-05f8-4414-93fc-583bf36528ef",
+      "pageName": "webarena_shopping",
+      "status": "completed",
+      "title": "One Stop Market",
+      "url": "http://localhost:7770/",
+      "durationMs": 189263,
+      "networkEventCount": 9094,
+      "interactionCount": 0,
+      "warningCount": 0,
+      "traceDir": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_51_26-js/698D50C4_trace"
+    }
+  ]
+}

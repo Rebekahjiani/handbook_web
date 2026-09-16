@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-orders",
+  "evidence": [
+    {"id": "orders-empty-history", "reviewed_source_path": "platform-core/reviewed/storefront-orders.evidence.jsonl", "reviewed_source_sha256": "884ec968b43b5071cd1148ed988d6d5e6c884b1d0b1a2888963ad3d0bada7473", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "orders-single-history-detail", "reviewed_source_path": "platform-core/reviewed/storefront-orders.evidence.jsonl", "reviewed_source_sha256": "884ec968b43b5071cd1148ed988d6d5e6c884b1d0b1a2888963ad3d0bada7473", "reviewed_at": "2026-08-28T05:33:19Z"},
+    {"id": "orders-multiple-history-detail", "reviewed_source_path": "platform-core/reviewed/storefront-orders.evidence.jsonl", "reviewed_source_sha256": "884ec968b43b5071cd1148ed988d6d5e6c884b1d0b1a2888963ad3d0bada7473", "reviewed_at": "2026-08-28T05:33:19Z"}
+  ]
+}

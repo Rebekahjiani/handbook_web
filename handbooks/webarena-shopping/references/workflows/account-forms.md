@@ -2,7 +2,7 @@
 
 适用线索：登录、注册、账户、个人信息、地址、联系表单
 
-证据状态：只有入口或邻近控件证据，关键步骤仍有缺口
+证据状态：已找到关键步骤的页面与 locator 证据
 
 ## 推荐流程
 
@@ -10,6 +10,13 @@
 2. 逐字段填写；优先按标签定位，不依赖字段在页面中的顺序。
 3. 提交前检查必填项、格式和可能的账户副作用。
 4. 提交后验证成功提示或回显值。
+
+## 站点模型约束
+
+- 业务能力 `establish-account`：输入 `Customer identity information permitted by the task.`；输出 `An authenticated customer account context.`；依赖上下文 `authenticated-shopping`。
+- 页面状态 `storefront-account`：URL `undefined`；必须同时观察字段 `无`。
+- 动作 `account-create`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
+- 动作 `account-access`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
 
 ## 成功判据
 

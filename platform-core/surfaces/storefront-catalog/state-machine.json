@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-catalog",
+  "states": [
+    {"id": "catalog-home", "observation_ids": ["catalog-home-visible"]},
+    {"id": "catalog-category-results", "observation_ids": ["catalog-category-results-visible"]},
+    {"id": "catalog-search-results", "observation_ids": ["catalog-search-results-visible"]},
+    {"id": "catalog-product-detail", "observation_ids": ["catalog-product-detail-visible"]}
+  ],
+  "transitions": [
+    {"from_state": "catalog-home", "action_id": "catalog-browse-category", "to_state": "catalog-category-results", "stop_conditions": ["A category collection is visible."], "failure_conditions": ["The requested category cannot be established."], "unknown_conditions": ["The collection state cannot be distinguished from a detail state."], "pagination_or_sort_state": ["Preserve the observed result segment and ordering state."]},
+    {"from_state": "catalog-category-results", "action_id": "catalog-advance-results", "to_state": "catalog-category-results", "stop_conditions": ["The next result segment is visible or no further segment is available."], "failure_conditions": ["The result segment does not change after the advance action."], "unknown_conditions": ["The last available segment was not independently exercised."], "pagination_or_sort_state": ["Track the current segment before aggregating values."]},
+    {"from_state": "catalog-home", "action_id": "catalog-search-products", "to_state": "catalog-search-results", "stop_conditions": ["A result collection for the submitted expression is visible."], "failure_conditions": ["No result state can be established."], "unknown_conditions": ["An empty result collection was not independently exercised."], "pagination_or_sort_state": ["Treat result segmentation and ordering as explicit collection state."]},
+    {"from_state": "catalog-category-results", "action_id": "catalog-inspect-product", "to_state": "catalog-product-detail", "stop_conditions": ["Product identity and price are observable."], "failure_conditions": ["The selected item does not establish product detail state."], "unknown_conditions": ["Configurable option requirements may be absent in this dataset fork."], "pagination_or_sort_state": ["Collection ordering no longer applies after entering product detail."]},
+    {"from_state": "catalog-search-results", "action_id": "catalog-inspect-product", "to_state": "catalog-product-detail", "stop_conditions": ["Product identity and price are observable."], "failure_conditions": ["The selected result does not establish product detail state."], "unknown_conditions": ["Review availability may represent only structural state."], "pagination_or_sort_state": ["Retain the originating collection context when comparison is required."]}
+  ]
+}

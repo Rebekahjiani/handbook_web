@@ -2,7 +2,7 @@
 
 适用线索：搜索、筛选、排序、商品发现
 
-证据状态：只有入口或邻近控件证据，关键步骤仍有缺口
+证据状态：已找到关键步骤的页面与 locator 证据
 
 ## 推荐流程
 
@@ -17,9 +17,9 @@
 
 ## 站点模型约束
 
-- 业务对象 `category`：字段 `name、hierarchy`。
-- 业务能力 `extract-product-field`：输入 `selected_product_detail_context、requested_field`；输出 `field_value`；依赖上下文 `selected-category-scope、selected-product-detail-context`。
-- 业务能力 `select-product-from-category`：输入 `requested_category、product_criteria`；输出 `selected_product`；依赖上下文 `selected-category-scope`。
+- 业务能力 `search-products`：输入 `A product expression or identifying attributes.`；输出 `Products matching the observed search result state.`；依赖上下文 `catalog-exploration`。
+- 页面状态 `storefront-catalog`：URL `undefined`；必须同时观察字段 `无`。
+- 动作 `catalog-search-products`：从当前快照重新解析 `目标控件`，操作后重新验证页面状态与对象身份。
 
 ## 成功判据
 

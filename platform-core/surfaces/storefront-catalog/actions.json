@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-catalog",
+  "actions": [
+    {"id": "catalog-browse-category", "kind": "context", "intent": "Enter a product category and inspect its collection.", "evidence_ids": ["catalog-home-category-pagination"]},
+    {"id": "catalog-advance-results", "kind": "context", "intent": "Advance within a segmented product collection.", "evidence_ids": ["catalog-home-category-pagination"]},
+    {"id": "catalog-search-products", "kind": "context", "intent": "Find products matching a search expression.", "evidence_ids": ["catalog-search-results"]},
+    {"id": "catalog-inspect-product", "kind": "context", "intent": "Inspect one product and its available descriptive state.", "evidence_ids": ["catalog-product-detail-review-surface"]}
+  ]
+}

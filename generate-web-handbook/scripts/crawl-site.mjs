@@ -13,13 +13,23 @@ import {
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
 
+async function loadWorkflowDefs(configPath) {
+  if (!configPath) return null;
+  const resolved = path.resolve(configPath);
+  const mod = await import(resolved);
+  if (!Array.isArray(mod.default)) {
+    throw new Error(`--workflow-config must export a default array: ${resolved}`);
+  }
+  return mod.default;
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
-    if (key === "fresh" || key === "save-html") {
+    if (key === "fresh" || key === "save-html" || key === "independent-exploration") {
       args[key] = true;
     } else {
       args[key] = argv[++i];
@@ -106,7 +116,7 @@ async function waitForDomSettled(page) {
     const signature = await page.evaluate(
       () =>
         `${document.querySelectorAll("a[href]").length}:` +
-        `${document.querySelectorAll("li.product-item").length}:` +
+        `${document.querySelectorAll("button,input,select,[role='button'],[role='tab']").length}:` +
         `${document.body?.innerText.length || 0}`,
     );
     if (signature === previous) {
@@ -154,6 +164,7 @@ async function collectRevealedNavigationLinks(page) {
 
 async function writeAggregateRouter(outputRoot) {
   const routes = [];
+  const sequences = [];
   for (const entry of await fs.readdir(outputRoot, { withFileTypes: true })) {
     if (
       !entry.isDirectory() ||
@@ -170,11 +181,23 @@ async function writeAggregateRouter(outputRoot) {
         skill_file: path.posix.join(entry.name, route.skill_file),
       });
     }
+    for (const sequence of siteRouter.sequences || []) {
+      sequences.push({
+        ...sequence,
+        skill_files: (sequence.skill_files || []).map((file) =>
+          path.posix.join(entry.name, file),
+        ),
+        ...(sequence.contract_file
+          ? { contract_file: path.posix.join(entry.name, sequence.contract_file) }
+          : {}),
+      });
+    }
   }
   await writeJsonAtomic(path.join(outputRoot, "webarena-router.json"), {
     schema_version: 1,
     router: "webarena-handbook-router",
     routes,
+    sequences,
   });
 }
 
@@ -430,6 +453,58 @@ async function collectPage(page) {
       });
     }
 
+    const labelFor = (el) => {
+      if (el.id) {
+        const label = document.querySelector(`label[for=${cssQuote(el.id)}]`);
+        if (label) return clean(label.innerText);
+      }
+      return clean(el.closest("label")?.innerText || el.getAttribute("aria-label") || el.getAttribute("placeholder"));
+    };
+    const forms = [...document.forms].filter(isVisible).map((form) => {
+      const fields = [...form.querySelectorAll("input:not([type='hidden']), select, textarea, [contenteditable='true']")]
+        .filter(isVisible)
+        .map((field) => ({
+          name: field.getAttribute("name") || "",
+          type: field.getAttribute("type") || field.tagName.toLowerCase(),
+          label: labelFor(field),
+          selector: cssPath(field),
+          required: field.required === true || field.getAttribute("aria-required") === "true",
+          placeholder: clean(field.getAttribute("placeholder")),
+        }));
+      const submitButtons = [...form.querySelectorAll("button, input[type='submit'], input[type='button']")]
+        .filter(isVisible)
+        .map((button) => ({
+          name: nameOf(button),
+          type: button.getAttribute("type") || "submit",
+          selector: cssPath(button),
+        }));
+      const confirmations = [...document.querySelectorAll("[role='alert'], .flash, .alert, .notice, [data-testid*='success'], [data-test*='success']")]
+        .filter(isVisible)
+        .map((node) => ({ selector: cssPath(node), text: clean(node.innerText, 160) }))
+        .filter((item) => item.text)
+        .slice(0, 4);
+      return {
+        selector: cssPath(form),
+        action: form.action || "",
+        method: (form.method || "get").toLowerCase(),
+        enctype: form.enctype || "",
+        fields,
+        submitButtons,
+        confirmations,
+      };
+    });
+    const visualAnchors = actions
+      .filter((action) => ["button", "link"].includes(action.role))
+      .filter((action) => action.name.length <= 32 || !action.name)
+      .slice(0, 12)
+      .map((action) => ({
+        actionId: action.id,
+        role: action.role,
+        name: action.name,
+        context: action.context,
+        box: action.box,
+      }));
+
     const firstExisting = (selectors) =>
       selectors.find((selector) => document.querySelector(selector)) || null;
     const structures = [];
@@ -494,6 +569,8 @@ async function collectPage(page) {
         .filter(Boolean)
         .slice(0, 20),
       actions,
+      forms,
+      visualAnchors,
       structures,
       unresolvedActionCount,
       links: [
@@ -563,10 +640,11 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.url) {
     throw new Error(
-      "Usage: crawl-site.mjs --url URL [--site NAME] [--output DIR] [--cdp URL] [--max-pages N] [--max-depth N] [--coverage-corpus FILE] [--focus-tasks FILE] [--tasks FILE] [--site-key NAME] [--context-model PATH] [--max-task-seeds N] [--previous-router FILE] [--allow-route-removal a,b] [--fresh]",
+      "Usage: crawl-site.mjs --url URL [--site NAME] [--output DIR] [--cdp URL] [--max-pages N] [--max-depth N] [--coverage-corpus FILE] [--focus-tasks FILE] [--tasks FILE] [--site-key NAME] [--context-model PATH] [--max-task-seeds N] [--previous-router FILE] [--allow-route-removal a,b] [--workflow-config FILE] [--independent-exploration] [--fresh]",
     );
   }
 
+  const workflowDefs = await loadWorkflowDefs(args["workflow-config"] || null);
   const startUrl = normalizeUrl(args.url);
   if (!startUrl) throw new Error(`Invalid URL: ${args.url}`);
   const startOrigin = new URL(startUrl).origin;
@@ -578,8 +656,17 @@ async function main() {
   const maxPages = Math.max(1, Number(args["max-pages"] || 5));
   const maxDepth = Math.max(0, Number(args["max-depth"] || 1));
   const cdp = args.cdp || "http://127.0.0.1:9222";
+  const independentExploration = args["independent-exploration"] === true;
   if (args.tasks && (args["coverage-corpus"] || args["focus-tasks"])) {
     throw new Error("--tasks cannot be combined with --coverage-corpus or --focus-tasks");
+  }
+  if (
+    independentExploration &&
+    (args.tasks || args["coverage-corpus"] || args["focus-tasks"] || args["max-task-seeds"])
+  ) {
+    throw new Error(
+      "--independent-exploration cannot read task corpora, task seeds, or task-derived crawl limits",
+    );
   }
   const coverageCorpusFile = args["coverage-corpus"]
     ? path.resolve(args["coverage-corpus"])
@@ -596,9 +683,11 @@ async function main() {
   const coverageTasks = await loadTaskCorpus(coverageCorpusFile, siteKey);
   const focusTasks = await loadTaskCorpus(focusTasksFile, siteKey);
   const contextModel = await loadContextModel(contextModelPath);
-  const taskSeeds = taskSeedUrls(focusTasks, startOrigin, siteKey).filter((url) =>
-    safeCrawlUrl(url, startOrigin),
-  );
+  const taskSeeds = independentExploration
+    ? []
+    : taskSeedUrls(focusTasks, startOrigin, siteKey).filter((url) =>
+        safeCrawlUrl(url, startOrigin),
+      );
   const maxTaskSeeds = Math.max(
     0,
     Number(args["max-task-seeds"] ?? Math.floor(maxPages / 3)),
@@ -640,6 +729,16 @@ async function main() {
     taskSeedsAvailable: taskSeeds.length,
     taskSeedsQueued: selectedTaskSeeds.length,
     status: "running",
+    exploration: {
+      mode: independentExploration ? "independent" : "task_informed",
+      taskInputRead: !independentExploration,
+      taskSeedCount: taskSeeds.length,
+      convergence: {
+        status: "running",
+        noNewStructureRoundsRequired: 0,
+        noNewStructureRoundsObserved: 0,
+      },
+    },
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     pages: [],
@@ -660,6 +759,16 @@ async function main() {
       focusTaskCount: focusTasks.length,
       taskSeedsAvailable: taskSeeds.length,
       taskSeedsQueued: selectedTaskSeeds.length,
+      exploration: {
+        mode: independentExploration ? "independent" : "task_informed",
+        taskInputRead: !independentExploration,
+        taskSeedCount: taskSeeds.length,
+        convergence: {
+          status: "running",
+          noNewStructureRoundsRequired: 0,
+          noNewStructureRoundsObserved: 0,
+        },
+      },
     });
     manifest.status = "running";
     manifest.updatedAt = new Date().toISOString();
@@ -684,8 +793,9 @@ async function main() {
   const enqueue = (url, depth, discoveryBoost = 0) => {
     const identity = crawlIdentity(url);
     if (!queued.has(url) && !queuedIdentities.has(identity)) {
-      const relevance =
-        url === startUrl
+      const relevance = independentExploration
+        ? { score: 0, depth: 0 }
+        : url === startUrl
           ? { score: Number.MAX_SAFE_INTEGER, depth: 0 }
           : taskLinkScore(url, focusTasks, startOrigin);
       queue.push({
@@ -765,6 +875,7 @@ async function main() {
           title: data.title,
           headings: data.headings,
           actions: data.actions,
+          forms: data.forms,
           structures: data.structures,
           unresolvedActionCount: data.unresolvedActionCount,
           links: [...new Set(links)],
@@ -792,6 +903,7 @@ async function main() {
           slug: currentSlug,
           title: data.title,
           actionCount: data.actions.length,
+          formCount: data.forms.length,
           structureCount: data.structures.length,
           unresolvedActionCount: data.unresolvedActionCount,
           links: record.links,
@@ -801,11 +913,9 @@ async function main() {
         completedIdentities.add(crawlIdentity(item.url));
         completedIdentities.add(crawlIdentity(finalUrl));
         if (item.depth < maxDepth) {
-          const rankedLinks = rankTaskLinks(
-            record.links,
-            focusTasks,
-            startOrigin,
-          );
+          const rankedLinks = independentExploration
+            ? [...record.links].sort()
+            : rankTaskLinks(record.links, focusTasks, startOrigin);
           for (const [index, link] of rankedLinks.entries()) {
             if (!completed.has(link) && !queued.has(link)) {
               enqueue(
@@ -857,6 +967,9 @@ async function main() {
     coverageTasks,
     focusTasks,
     contextModel,
+    artifactRoot: siteDir,
+    evidenceOnly: independentExploration,
+    ...(workflowDefs ? { workflowDefs } : {}),
   });
   const routerAudit = auditRouter({
     router: generated.router,
@@ -956,6 +1069,11 @@ async function main() {
   );
   manifest.status = "completed";
   manifest.updatedAt = new Date().toISOString();
+  manifest.exploration.convergence = {
+    status: queue.length === 0 ? "budget_exhausted_or_frontier_empty" : "budget_exhausted",
+    noNewStructureRoundsRequired: 0,
+    noNewStructureRoundsObserved: 0,
+  };
   manifest.summary = {
     pagesCaptured: pageRecords.length,
     actionsCaptured: pageRecords.reduce((sum, item) => sum + item.actions.length, 0),

@@ -1,0 +1,17 @@
+{
+  "experiment": "webarena-shopping-skill-generator-20260904-dsml-fix",
+  "hypothesis": "DSML 解析器修复（双竖线方言 + 自闭合 invoke）后，228/332/141 三题的工具调用可被正确解析，Agent 能完成任务，分数应恢复或改善。",
+  "baseline": "webarena-shopping-skill-generator-20260903-budget-stop (run7)",
+  "change": "stream_impl.rs parse_dsml_tool_calls 扩展：支持 <｜｜DSML｜｜tool_calls> 双竖线方言和 <｜DSML｜invoke name='X'/> 自闭合 invoke",
+  "tasks": [282, 228, 332, 141],
+  "group": "baselineB_skill_routed",
+  "skill_sha": "e33033cdee1d7a82",
+  "contract_audit_mode": "enforce",
+  "created_at": "2026-09-04T02:47:57Z",
+  "run7_scores": {"282": 0, "228": 0, "332": 0, "141": 0},
+  "run7_root_cause": {
+    "228": "双竖线方言 DSML → 解析失败 → 0 tool calls → run_completed",
+    "332": "双竖线方言 DSML → 解析失败 → retrieved_data = DSML 标记文本",
+    "141": "自闭合 invoke + env reset 超时，两者均需修复"
+  }
+}

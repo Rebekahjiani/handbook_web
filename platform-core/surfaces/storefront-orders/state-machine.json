@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "surface_id": "storefront-orders",
+  "states": [
+    {"id": "orders-empty", "observation_ids": ["orders-history-empty"]},
+    {"id": "orders-populated", "observation_ids": ["orders-history-populated"]},
+    {"id": "order-detail", "observation_ids": ["orders-detail-visible"]}
+  ],
+  "transitions": [
+    {"from_state": "orders-empty", "action_id": "orders-inspect-history", "to_state": "orders-empty", "stop_conditions": ["The empty history state is established."], "failure_conditions": ["Order history cannot be inspected."], "unknown_conditions": ["A delayed order update was not independently exercised."], "pagination_or_sort_state": ["No result segmentation is present in the evidenced empty state."]},
+    {"from_state": "orders-populated", "action_id": "orders-inspect-history", "to_state": "orders-populated", "stop_conditions": ["The visible order collection is established."], "failure_conditions": ["Order rows cannot be enumerated."], "unknown_conditions": ["Large multi-segment order histories were not covered by the dedicated profile."], "pagination_or_sort_state": ["Preserve collection segment and ordering when aggregating orders."]},
+    {"from_state": "orders-populated", "action_id": "orders-inspect-detail", "to_state": "order-detail", "stop_conditions": ["The selected order detail state is established."], "failure_conditions": ["The selected order cannot be matched to its details."], "unknown_conditions": ["Unsupported order mutations must not be inferred from detail visibility."], "pagination_or_sort_state": ["Return to the originating collection state when comparing multiple orders."]}
+  ]
+}

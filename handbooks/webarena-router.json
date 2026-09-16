@@ -4,6 +4,141 @@
   "routes": [
     {
       "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "cross-site-post",
+      "priority": 0,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "gitlab|gimmiethat\\.space|OneStopShop|byteblaze|koush|auth0|lahwaacz|promote\\s+\\w+\\/\\w+|create.*folder.*\\brepo\\b|make.*folder.*\\brepo\\b|create\\s+a\\s+repository\\s+named|make\\s+a\\s+(?:folder|repository)\\s+named.*\\brepo\\b|gitlabΨ",
+      "skill_file": "webarena-reddit/runtime-skills/cross-site-post/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "cross-site-post",
+      "reason": "跨站内容引用并发帖"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "forum-create",
+      "priority": 1,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "create\\s+(?:a\\s+)?(?:new\\s+)?forum\\s+(?:named|with\\s+name)|create\\s+(?:a\\s+)?(?:new\\s+)?subreddit\\s+(?:named|with\\s+name)",
+      "skill_file": "webarena-reddit/runtime-skills/forum-create/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "forum-create",
+      "reason": "创建新论坛（Subreddit）"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "post-create",
+      "priority": 2,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "^(?![\\s\\S]*\\bcreate\\s+(?:a\\s+)?(?:new\\s+)?forum\\b)(?![\\s\\S]*(?:OneStopShop|customer reviews?|gitlab|gimmiethat\\.space))[\\s\\S]*(?:\\bpost\\s+(?:a|my|about)\\b|\\bpost\\s+(?:the\\s+)?(?:question|review|notice|comment)\\b|\\bcreate\\s+(?:a\\s+)?(?:discussion\\s+)?post\\b|\\bre-?post\\b|\\bask\\s+for\\s+(?:advice|(?:product\\s+)?rec[oe]mmend)|\\bpost\\s+my\\s+question\\b)",
+      "skill_file": "webarena-reddit/runtime-skills/post-create/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "post-create",
+      "reason": "在 Subreddit 中发布新帖"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "post-reply",
+      "priority": 3,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "^(?![\\s\\S]*\\bthen\\s+comment\\b)[\\s\\S]*(?:\\breply\\b.*\\b(?:post|comment|thread)\\b|\\breply\\s+to\\b|\\bcomment\\b.*\\b(?:post|thread)\\b|\\brespond\\b|\\banswer\\b.*\\b(?:post|thread)\\b)",
+      "skill_file": "webarena-reddit/runtime-skills/post-reply/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "post-reply",
+      "reason": "回复帖子或评论"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "vote",
+      "priority": 4,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\bupvote\\s+(?:the\\s+)?(?:newest|latest|top|\\d+\\s+)?\\w*\\s*post\\b|\\bdownvote\\b|\\bthumb[s]?\\s+(?:up|down)\\b|\\blike\\s+all\\b|\\bdislike\\s+all\\b|\\blike\\s+(?:all\\s+)?submissions?\\b|\\bdislike\\s+(?:all\\s+)?submissions?\\b|\\blike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b|\\bdislike\\s+(?:the\\s+)?(?:newest|latest|top|all)\\s+post\\b",
+      "skill_file": "webarena-reddit/runtime-skills/vote/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "vote",
+      "reason": "投票（点赞 / 踩）"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "user-edit",
+      "priority": 5,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\b(?:change|update|set|edit)\\s+my\\s+(?:reddit\\s+)?bio\\b|\\bedit\\s+my\\s+post\\b|\\bedit\\s+my\\s+(?:post\\s+)?on\\b",
+      "skill_file": "webarena-reddit/runtime-skills/user-edit/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "user-edit",
+      "reason": "编辑个人资料或自己的帖子"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "subscribe",
+      "priority": 6,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "\\bsubscribe\\b|\\bfollow\\s+(?:a\\s+)?(?:forum|subreddit|thread|post)\\b",
+      "skill_file": "webarena-reddit/runtime-skills/subscribe/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "subscribe",
+      "reason": "订阅论坛或帖子"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "read-post",
+      "priority": 7,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:tell me|show me|find|list|count|read|get|return|how many|what|which|among the top)\\b",
+      "skill_file": "webarena-reddit/runtime-skills/read-post/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "read-post",
+      "reason": "浏览、搜索与读取帖子内容"
+    },
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "other",
+      "priority": 8,
+      "backoff": false,
+      "fallback": true,
+      "intent_pattern": ".*",
+      "skill_file": "webarena-reddit/runtime-skills/other/SKILL.md",
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflow": "other",
+      "reason": "未归类任务"
+    },
+    {
+      "site_keys": [
         "shopping"
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
@@ -11,11 +146,140 @@
       "priority": 0,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|refund|each month|excluding shipping|including shipping",
+      "intent_pattern": "how many .*orders|complete orders|amount .*spent|spent on|total amount|total cost|refund|each month|excluding shipping|including shipping",
       "skill_file": "webarena-shopping/runtime-skills/order-aggregation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/order-aggregation.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "order-aggregation",
-      "reason": "订单筛选、金额聚合与退款"
+      "reason": "订单筛选、金额聚合与退款",
+      "capability_ids": [
+        "aggregate-orders"
+      ],
+      "evidence_ids": [
+        "orders-multiple-history-detail"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "order",
+        "operations": [
+          "aggregate",
+          "lookup"
+        ],
+        "selection": [
+          {
+            "field": "purchase_date",
+            "operator": "latest"
+          },
+          {
+            "field": "status",
+            "operator": "exists"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "pending"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "processing"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "completed"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "canceled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "refunded"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "canceled"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "refunded"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "eq"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "range"
+          },
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "purchase_date",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          },
+          {
+            "field": "grand_total",
+            "type": "number"
+          },
+          {
+            "field": "item_subtotal",
+            "type": "number"
+          },
+          {
+            "field": "order_count",
+            "type": "number"
+          },
+          {
+            "field": "count",
+            "type": "number"
+          },
+          {
+            "field": "amount",
+            "type": "number"
+          },
+          {
+            "field": "month",
+            "type": "string"
+          },
+          {
+            "field": "total",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [
+          "detail_url"
+        ],
+        "requiresDetail": true
+      }
     },
     {
       "site_keys": [
@@ -28,9 +292,198 @@
       "fallback": false,
       "intent_pattern": "\\borders?\\b|purchase (?:history|date)|(?:first|last|recent) purchase|purchase.*\\bdate\\b|bought|shipping method|billing address|arrival|delivery|cancelled|pending|processing",
       "skill_file": "webarena-shopping/runtime-skills/order-lookup/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/order-lookup.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "order-lookup",
-      "reason": "订单查找与已购商品属性"
+      "reason": "订单查找与已购商品属性",
+      "capability_ids": [
+        "inspect-orders"
+      ],
+      "evidence_ids": [
+        "orders-empty-history",
+        "orders-single-history-detail",
+        "orders-multiple-history-detail"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "order",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "purchase_date",
+            "operator": "latest"
+          },
+          {
+            "field": "status",
+            "operator": "exists"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "pending"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "processing"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "completed"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "canceled"
+          },
+          {
+            "field": "status",
+            "operator": "eq",
+            "value": "refunded"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "cancelled"
+          },
+          {
+            "field": "status",
+            "operator": "neq",
+            "value": "canceled"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "eq"
+          },
+          {
+            "field": "purchase_date",
+            "operator": "range"
+          },
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "purchase_date",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          },
+          {
+            "field": "arrival_date",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [
+          "detail_url"
+        ],
+        "requiresDetail": true
+      }
+    },
+    {
+      "site_keys": [
+        "shopping"
+      ],
+      "origin_pattern": "^http://localhost:7770(?:/|$)",
+      "route": "checkout",
+      "priority": 2,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "buy|purchase .*product|checkout|place .*order|payment|shipping address",
+      "skill_file": "webarena-shopping/runtime-skills/checkout/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/checkout.json",
+      "runtime_mode": "workflow_skill",
+      "contract_file": "webarena-shopping/references/execution-contract.json",
+      "contract_workflow": "checkout",
+      "reason": "购买与结账",
+      "capability_ids": [
+        "submit-purchase"
+      ],
+      "evidence_ids": [
+        "checkout-payment-ready",
+        "checkout-order-confirmed"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "checkout",
+        "operations": [
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "order_number",
+            "type": "string"
+          },
+          {
+            "field": "status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
+    },
+    {
+      "site_keys": [
+        "shopping"
+      ],
+      "origin_pattern": "^http://localhost:7770(?:/|$)",
+      "route": "cart-lists",
+      "priority": 3,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "cart|wishlist|wish list|compare|add .*item|remove .*item|quantity",
+      "skill_file": "webarena-shopping/runtime-skills/cart-lists/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/cart-lists.json",
+      "runtime_mode": "workflow_skill",
+      "contract_file": "webarena-shopping/references/execution-contract.json",
+      "contract_workflow": "cart-lists",
+      "reason": "购物车、愿望单与比较",
+      "capability_ids": [
+        "manage-cart"
+      ],
+      "evidence_ids": [
+        "cart-add-and-nonempty"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "cart",
+        "operations": [
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "quantity",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -38,14 +491,20 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "reviews",
-      "priority": 2,
+      "priority": 4,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "review|reviewer|rating|stars?|product on the current page|summarize|customer names|complain|good looking",
       "skill_file": "webarena-shopping/runtime-skills/reviews/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/reviews.json",
+      "runtime_mode": "contract_only",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "reviews",
-      "reason": "商品详情与评论"
+      "reason": "商品详情与评论",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -53,14 +512,41 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "account-forms",
-      "priority": 3,
+      "priority": 5,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "\\b(?:log in|login|sign in|register|account|profile|address|contact|newsletter|form)\\b",
       "skill_file": "webarena-shopping/runtime-skills/account-forms/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/account-forms.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "account-forms",
-      "reason": "账户、地址与表单"
+      "reason": "账户、地址与表单",
+      "capability_ids": [
+        "establish-account"
+      ],
+      "evidence_ids": [
+        "account-registration-authenticated",
+        "account-existing-session"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "account",
+        "operations": [
+          "lookup",
+          "read",
+          "mutate"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "account_status",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -68,14 +554,44 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "category-navigation",
-      "priority": 4,
+      "priority": 6,
       "backoff": false,
       "fallback": false,
-      "intent_pattern": "open .*category page|category page.*filtered|browse products",
+      "intent_pattern": "open .*category page|category page.*filtered|browse products|go to .*(?:category|products?|page).*sorted|page showing.*products?|navigate to .*category|category.*(?:sorted|filtered|ascending|descending)",
       "skill_file": "webarena-shopping/runtime-skills/category-navigation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/category-navigation.json",
+      "runtime_mode": "contract_only",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "category-navigation",
-      "reason": "分类页导航与价格过滤"
+      "reason": "分类页导航与价格过滤",
+      "capability_ids": [
+        "browse-catalog"
+      ],
+      "evidence_ids": [
+        "catalog-home-category-pagination"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "catalog",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "product_category",
+            "operator": "eq"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "category_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -83,14 +599,59 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "catalog-aggregation",
-      "priority": 5,
+      "priority": 7,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "price range|full names|available models|products from",
       "skill_file": "webarena-shopping/runtime-skills/catalog-aggregation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/catalog-aggregation.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "catalog-aggregation",
-      "reason": "商品集合、名称与价格聚合"
+      "reason": "商品集合、名称与价格聚合",
+      "capability_ids": [
+        "browse-catalog"
+      ],
+      "evidence_ids": [
+        "catalog-home-category-pagination"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "product",
+        "operations": [
+          "aggregate",
+          "lookup"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "names",
+            "type": "array"
+          },
+          {
+            "field": "min_price",
+            "type": "number"
+          },
+          {
+            "field": "max_price",
+            "type": "number"
+          },
+          {
+            "field": "min",
+            "type": "number"
+          },
+          {
+            "field": "max",
+            "type": "number"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -98,14 +659,56 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "product-selection",
-      "priority": 6,
+      "priority": 8,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "product page.*(?:best|least expensive|most expensive)|best .*option|least expensive|most recent .*released|released between",
       "skill_file": "webarena-shopping/runtime-skills/product-selection/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/product-selection.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "product-selection",
-      "reason": "满足约束的最优商品选择"
+      "reason": "满足约束的最优商品选择",
+      "capability_ids": [
+        "inspect-product"
+      ],
+      "evidence_ids": [
+        "catalog-product-detail-review-surface"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "product",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [
+          {
+            "field": "price",
+            "operator": "min"
+          },
+          {
+            "field": "price",
+            "operator": "max"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "price",
+            "type": "number"
+          },
+          {
+            "field": "product_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -113,14 +716,43 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "search-discovery",
-      "priority": 7,
+      "priority": 9,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:search|find|category|sorted|sort by|most expensive|listings|sale)\\b|product page",
       "skill_file": "webarena-shopping/runtime-skills/search-discovery/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/search-discovery.json",
+      "runtime_mode": "contract_only",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "search-discovery",
-      "reason": "通用搜索、筛选与商品发现"
+      "reason": "通用搜索、筛选与商品发现",
+      "capability_ids": [
+        "search-products"
+      ],
+      "evidence_ids": [
+        "catalog-search-results"
+      ],
+      "context_support": "supported",
+      "capability_signature": {
+        "entity": "product",
+        "operations": [
+          "lookup",
+          "read"
+        ],
+        "selection": [],
+        "outputs": [
+          {
+            "field": "product_name",
+            "type": "string"
+          },
+          {
+            "field": "product_url",
+            "type": "string"
+          }
+        ],
+        "executionDependencies": [],
+        "requiresDetail": false
+      }
     },
     {
       "site_keys": [
@@ -128,14 +760,20 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "read-content",
-      "priority": 8,
+      "priority": 10,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:get|return|list|show|summarize|what is|how many|find out|read|retrieve|download|export)\\b",
       "skill_file": "webarena-shopping/runtime-skills/read-content/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/read-content.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "read-content",
-      "reason": "读取列表、详情与结构化数据"
+      "reason": "读取列表、详情与结构化数据",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -143,14 +781,20 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "edit-submit",
-      "priority": 9,
+      "priority": 11,
       "backoff": false,
       "fallback": false,
       "intent_pattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
       "skill_file": "webarena-shopping/runtime-skills/edit-submit/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/edit-submit.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "edit-submit",
-      "reason": "创建、修改与提交"
+      "reason": "创建、修改与提交",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -158,14 +802,20 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "navigation",
-      "priority": 10,
+      "priority": 12,
       "backoff": true,
       "fallback": false,
       "intent_pattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
       "skill_file": "webarena-shopping/runtime-skills/navigation/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/navigation.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "navigation",
-      "reason": "页面导航"
+      "reason": "页面导航",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
+      "capability_signature": null
     },
     {
       "site_keys": [
@@ -173,14 +823,150 @@
       ],
       "origin_pattern": "^http://localhost:7770(?:/|$)",
       "route": "other",
-      "priority": 11,
+      "priority": 13,
       "backoff": false,
       "fallback": true,
       "intent_pattern": ".*",
       "skill_file": "webarena-shopping/runtime-skills/other/SKILL.md",
+      "runtime_contract_file": "runtime-contracts/other.json",
+      "runtime_mode": "workflow_skill",
       "contract_file": "webarena-shopping/references/execution-contract.json",
       "contract_workflow": "other",
+      "reason": "未归类任务",
+      "capability_ids": [],
+      "evidence_ids": [],
+      "context_support": "fallback",
+      "capability_signature": null
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "admin-report",
+      "priority": 0,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "best.?selling|top.?\\d|revenue|total.*sold|items? sold|sales.*report|best.*brand|best.*product type",
+      "skill_file": "webarena-shopping-admin/runtime-skills/admin-report/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "admin-report",
+      "reason": "销售报表与聚合统计"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "admin-product-edit",
+      "priority": 1,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "(?:reduce|increase)\\s+(?:the\\s+)?price|(?:disable|enable)\\s+\\w|mark\\s+all\\s+\\w|(?:update|change|set)\\s+(?:the\\s+|all\\s+)?(?:\\w+\\s+)*(?:price|description|stock|out.?of.?stock|status|on.?sale|attribute|SKU)|set.*on.?sale",
+      "skill_file": "webarena-shopping-admin/runtime-skills/admin-product-edit/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "admin-product-edit",
+      "reason": "商品属性编辑与状态管理"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "admin-customer",
+      "priority": 2,
+      "backoff": false,
+      "fallback": false,
+      "intent_pattern": "customer(?:\\s+\\w+){0,3}\\s+(?:email|name|group|address|account)|(?:list|view|return|get)\\s+(?:all\\s+)?customers?(?:\\s|$)|view.*details.*(?:all\\s+)?customers?",
+      "skill_file": "webarena-shopping-admin/runtime-skills/admin-customer/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "admin-customer",
+      "reason": "客户信息查询与管理"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "read-content",
+      "priority": 3,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:get|return|list|show|summarize|what(?:'s| is)|how many|find out|read|retrieve|give me)\\b",
+      "skill_file": "webarena-shopping-admin/runtime-skills/read-content/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "read-content",
+      "reason": "读取列表、详情与结构化数据"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "edit-submit",
+      "priority": 4,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:create|add|edit|update|change|delete|remove|submit|upload|send|subscribe|post|publish|save)\\b",
+      "skill_file": "webarena-shopping-admin/runtime-skills/edit-submit/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "edit-submit",
+      "reason": "创建、修改与提交"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "navigation",
+      "priority": 5,
+      "backoff": true,
+      "fallback": false,
+      "intent_pattern": "\\b(?:open|go to|navigate|pull up)\\b|\\bview .*page\\b|\\bcurrent page\\b",
+      "skill_file": "webarena-shopping-admin/runtime-skills/navigation/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "navigation",
+      "reason": "页面导航"
+    },
+    {
+      "site_keys": [
+        "shopping_admin"
+      ],
+      "origin_pattern": "^http://localhost:7780(?:/|$)",
+      "route": "other",
+      "priority": 6,
+      "backoff": false,
+      "fallback": true,
+      "intent_pattern": ".*",
+      "skill_file": "webarena-shopping-admin/runtime-skills/other/SKILL.md",
+      "contract_file": "webarena-shopping-admin/references/execution-contract.json",
+      "contract_workflow": "other",
       "reason": "未归类任务"
+    }
+  ],
+  "sequences": [
+    {
+      "site_keys": [
+        "reddit"
+      ],
+      "origin_pattern": "^http://localhost:9999(?:/|$)",
+      "route": "post-create-then-reply",
+      "priority": 0,
+      "intent_pattern": "\\bpost\\b[\\s\\S]*\\b(?:then|and then)\\b[\\s\\S]*\\b(?:comment|reply)\\b",
+      "workflows": [
+        "post-create",
+        "post-reply"
+      ],
+      "skill_files": [
+        "webarena-reddit/runtime-skills/post-create/SKILL.md",
+        "webarena-reddit/runtime-skills/post-reply/SKILL.md"
+      ],
+      "contract_file": "webarena-reddit/references/execution-contract.json",
+      "contract_workflows": [
+        "post-create",
+        "post-reply"
+      ],
+      "reason": "创建帖子并回复创建的帖子"
     }
   ]
 }

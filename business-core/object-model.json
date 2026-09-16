@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "objects": [
+    {"id": "product", "meaning": "A purchasable catalog item with identity, descriptive attributes, price, and availability-related state."},
+    {"id": "product-collection", "meaning": "An ordered or segmented set of products produced by browsing or search criteria."},
+    {"id": "customer-account", "meaning": "A customer identity and authenticated shopping context."},
+    {"id": "shopping-cart", "meaning": "The current set of intended purchases before order submission."},
+    {"id": "checkout", "meaning": "The preparation state that gathers the information required to submit a purchase."},
+    {"id": "order", "meaning": "A submitted purchase with a stable identity, status, monetary values, items, and customer information."},
+    {"id": "order-collection", "meaning": "The customer account history containing zero or more orders."}
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "webarena-reddit"
+  short_description: "webarena-reddit 的精确浏览器操作指南"
+  default_prompt: "使用 $use-webarena-reddit 和已验证的 selector 操作 webarena-reddit。"

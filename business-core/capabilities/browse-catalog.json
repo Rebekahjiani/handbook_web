@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "id": "browse-catalog",
+  "object_ids": ["product-collection", "product"],
+  "inputs": ["A category or catalog area to inspect."],
+  "outputs": ["A product collection with its observed segmentation and ordering context."],
+  "business_conditions": ["Collection boundaries must be preserved when results span multiple segments.", "Absence must not be concluded before the evidenced collection scope is exhausted."],
+  "requires_context_ids": ["catalog-exploration"],
+  "provenance": [{"type": "reviewed_evidence", "evidence_ids": ["catalog-home-category-pagination"]}]
+}

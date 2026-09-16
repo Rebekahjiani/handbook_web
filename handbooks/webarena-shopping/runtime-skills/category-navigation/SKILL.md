@@ -5,14 +5,11 @@ description: webarena-shopping 的分类页导航与价格过滤工作流。
 
 # 运行规则
 
-- 本技能已由总 router 按站点和任务预选；只执行本工作流。
-- 以实时浏览器状态为准。导航或分页后废弃旧引用，并重新核对 URL、标题和对象身份。
-- 列表任务优先在当前页面做一次作用域明确的 DOM 读取；不要反复保存或加载整页快照。
-- 保持一个短台账：目标、固定约束、已验证记录、未访问页。不要在执行中改变口径。
-- 每次分页只允许一次批量读取；记录页面身份，禁止重复访问同一页。
-- 提交前重新读取当前 URL、标题和目标对象；不得用旧观察描述最终状态。
-- 达到成功判据后立即结束。任务协议要求 NOT_FOUND 时使用 `retrieved_data: null`，不要用空数组。
-- 不得把中断、缺少证据或空结果包装成 SUCCESS；不得回答或索取下一题。
+- 只执行当前路由；保持目标、硬约束和已验证证据台账，不改变任务口径。
+- 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
+- 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
+- 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
+- 最终响应服从任务给出的 expected status：若为 `NOT_FOUND_ERROR`，`retrieved_data` 必须是 JSON `null`，不能返回 `[]`、`[0]` 或 `[0.0]`。
 
 # 分类页导航与价格过滤
 
@@ -73,7 +70,7 @@ description: webarena-shopping 的分类页导航与价格过滤工作流。
 
 ## 单次读取模板
 
-在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。
+在当前列表页执行一次；把返回的 `pageId` 加入已访问集合，只沿 `nextHref` 前进。**必须原样执行此模板，不得修改字段名或省略 `pageId`/`actionId` 等任何字段。**
 
 ```js
 () => {
@@ -131,16 +128,14 @@ description: webarena-shopping 的分类页导航与价格过滤工作流。
 
 ## 操作锚点
 
-- Search：`getByRole("button", { name: "Search", exact: true })`
-- Page Next：`locator("a.action[href=\"${SITE_ORIGIN}/?pbaocw=2\"]")`
-- View as List：`locator("a.modes-mode[href=\"#\"]")`
+- Advanced Search：`locator("a.action[href=\"${SITE_ORIGIN}/catalogsearch/advanced/\"]")`（confidence=0.55，evidence=unique,scoped）
+- Beauty & Personal Care：`locator("a.level-top[href=\"${SITE_ORIGIN}/beauty-personal-care.html\"]")`（confidence=0.55，evidence=unique,scoped）
+- Sports & Outdoors：`locator("a.level-top[href=\"${SITE_ORIGIN}/sports-outdoors.html\"]")`（confidence=0.55，evidence=unique,scoped）
 
 ## 最终状态闸门
 
-- 成功前的最后一次浏览器调用必须读取实时 `URL + title + H1/目标对象`；最终答案只能描述这次读取到的当前状态。
-- NAVIGATE 任务中，当前 URL 必须精确等于选中的候选 URL，并逐项保留任务要求的小数边界与 query 参数；不允许用语义近似页面代替。
-- RETRIEVE 任务中，先按要求校验返回值的类型、空值协议和字段集合；浏览器中断或证据不足时不得返回 SUCCESS。
-- 如果口头选中的候选与当前 URL 不一致，必须导航到候选并重新执行本闸门；否则判定失败。
+- 报告 SUCCESS 前，最后一次浏览器工具调用必须是 `localweb_browser_snapshot` 或 `localweb_browser_evaluate`；navigate/click 后必须再读取当前状态。
+- 按前置 Workflow IR 的 `postStateGate` 完成 URL、标题/目标对象和结果证据校验；闸门通过前不得报告 SUCCESS。
 
 ## 完成证明
 
