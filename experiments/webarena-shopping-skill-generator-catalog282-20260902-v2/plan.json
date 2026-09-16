@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment": "webarena-shopping-skill-generator-catalog282-20260902-v2",
+  "created_at": "2026-09-02T10:05:00+08:00",
+  "purpose": "Verify canonical direct search navigation, strict title admission, and immediate finalization after evidence submission.",
+  "classification": "single_task_skill_regression_not_full_benchmark",
+  "task_ids": [282],
+  "condition": "baselineB_skill_routed with regenerated Shopping Skill and execution contract",
+  "comparison_evidence": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v1/baselineB_skill_routed/282",
+  "fixed_runtime": {
+    "agent_id": "阿器",
+    "timeout_seconds": 600,
+    "contract_audit_mode": "enforce",
+    "run_evaluator": true,
+    "clean_reset_source": "the freshly rebuilt and manually initialized shopping container from the v1 preflight",
+    "output_root": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v2"
+  },
+  "frozen_hashes": {
+    "handbook_web_commit": "448d9fa961c32d1a37ccf81df7ec06f595ad7c62",
+    "artifacttrace_commit": "736596e425b60bf5de15864790d30a84e89863ac",
+    "workflow_generator_source_sha256": "5c1228359bd982b04bebe7cad587f9235e4f3b4354be8fcc806da536f6e034e7",
+    "runner_sha256": "832f87bc1c64bb752c1c04221a5ba7936048e63ec63be7190696a495134fa8c7",
+    "router_sha256": "126edee1466780bc9fbb41e92d95e859a673872f0b7f6c0185360ef16145b116",
+    "catalog_aggregation_skill_sha256": "1638cdf5814b408d0b752569d2bff6afc207d6a1cdd00f68fa579a143b5b5174",
+    "execution_contract_sha256": "59b16f89082bf7d306eb7cebaf1714ad97a420561cf06b3e9a9f1805b422e138"
+  },
+  "success_criteria": {
+    "required": ["runtime completed", "official evaluator score 1", "no post-submission browser calls"],
+    "diagnostic": ["no search-box interactions", "title-mismatch detail expansion absent", "tool calls fewer than v1's 32"]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "experiment": "webarena-shopping-skill-generator-catalog282-runtime-budget-20260902-v3",
+  "status": "runtime_budget_enforced_run_stopping_missing",
+  "task_id": 282,
+  "group": "baselineB_skill_routed",
+  "runner_timeout_seconds": 0,
+  "elapsed_seconds": 660.093,
+  "stopped_by_operator": true,
+  "score": null,
+  "evaluator_ran": false,
+  "agent_response_written": false,
+  "trace": "/opt/artifacttrace/local-at/tasks/09-02-wa-baselinebskillrouted-task-282-20260902-071946/.at/run/run_20260902_071949_91f9/trace.jsonl",
+  "server_output": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-runtime-budget-20260902-v3/baselineB_skill_routed/282",
+  "counts": {
+    "events": 222,
+    "model_calls_completed": 55,
+    "tool_calls": 55,
+    "contract_actions_started": 6,
+    "contract_actions_completed": 2,
+    "contract_actions_failed": 4,
+    "browser_navigate": 12,
+    "browser_snapshot": 17,
+    "browser_find": 12,
+    "browser_type": 3,
+    "browser_click": 3,
+    "browser_evaluate": 1,
+    "browser_hover": 1
+  },
+  "budget_verification": {
+    "max_list_pages": 2,
+    "first_two_list_reads_completed": true,
+    "later_list_reads_rejected": 4,
+    "rejection": "contract_action_rejected: workflow browser.evaluate budget exceeded",
+    "passed": true
+  },
+  "verified_facts": [
+    "The runner continued beyond 600 seconds because timeout_seconds was 0.",
+    "The runtime accepted exactly two catalog browser.evaluate contract actions.",
+    "The runtime rejected four later list reads, including different page and facet page_ids.",
+    "The agent continued ordinary browser navigation, find, and snapshot calls after budget exhaustion and did not produce a terminal response."
+  ],
+  "decision": {
+    "continue_skill_generator": true,
+    "continue_runtime_contract_integration": true,
+    "add_trace_now": false,
+    "change_context_model_format_now": false,
+    "reason": "Existing evidence is sufficient; the remaining failure is enforcement scope and budget-exhaustion stopping behavior, not missing site evidence or Context Model expressiveness."
+  },
+  "excluded_attempts": {
+    "v1": "infrastructure-only: missing ARTIFACTTRACE_CONTRACT_ROOT",
+    "v2": "implementation diagnostic: maxListPages was not enforced separately"
+  }
+}

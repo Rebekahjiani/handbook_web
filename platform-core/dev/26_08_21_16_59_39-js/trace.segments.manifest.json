@@ -1,0 +1,140 @@
+{
+  "segments": [
+    {
+      "segmentId": "5d50fe12-911d-4491-aa8e-57485b8e9447",
+      "segmentIndex": 0,
+      "startedAt": 1787302780389,
+      "stoppedAt": 1787302795392,
+      "durationMs": 15003,
+      "eventCount": 340884,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000001.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "4d863c32-2efb-40b1-a1f9-514b873b76ac",
+      "segmentIndex": 1,
+      "startedAt": 1787302798204,
+      "stoppedAt": 1787302810393,
+      "durationMs": 12189,
+      "eventCount": 34977,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000002.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "9334f729-17d9-401c-8737-86b9d7610f81",
+      "segmentIndex": 2,
+      "startedAt": 1787302810713,
+      "stoppedAt": 1787302825393,
+      "durationMs": 14680,
+      "eventCount": 355960,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000003.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "d23da3f3-5766-40f8-a558-1eeb0ec34035",
+      "segmentIndex": 3,
+      "startedAt": 1787302828231,
+      "stoppedAt": 1787302840395,
+      "durationMs": 12164,
+      "eventCount": 50152,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000004.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "af61b8de-260c-4961-a3d2-7958983a8c21",
+      "segmentIndex": 4,
+      "startedAt": 1787302840878,
+      "stoppedAt": 1787302855395,
+      "durationMs": 14517,
+      "eventCount": 141244,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000005.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "71e5949f-db15-429e-9a63-72a6d78f339f",
+      "segmentIndex": 5,
+      "startedAt": 1787302857163,
+      "stoppedAt": 1787302870396,
+      "durationMs": 13233,
+      "eventCount": 49345,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000006.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "7b4afaf9-8a98-41c2-b5d7-4114c9a2b205",
+      "segmentIndex": 6,
+      "startedAt": 1787302870888,
+      "stoppedAt": 1787302885397,
+      "durationMs": 14509,
+      "eventCount": 41904,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000007.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "baeb928f-3bae-404b-b93e-4f66e213ab1e",
+      "segmentIndex": 7,
+      "startedAt": 1787302885758,
+      "stoppedAt": 1787302900397,
+      "durationMs": 14639,
+      "eventCount": 144046,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000008.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "b1fa7c92-b10c-47c7-b368-bf8db78674ea",
+      "segmentIndex": 8,
+      "startedAt": 1787302901733,
+      "stoppedAt": 1787302915398,
+      "durationMs": 13665,
+      "eventCount": 505000,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000009.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "5d7a59d4-d4ad-45a6-8309-16dd1381d225",
+      "segmentIndex": 9,
+      "startedAt": 1787302919568,
+      "stoppedAt": 1787302930399,
+      "durationMs": 10831,
+      "eventCount": 36877,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000010.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "2426d6be-1ac9-45aa-a470-4ad81597dc32",
+      "segmentIndex": 10,
+      "startedAt": 1787302930725,
+      "stoppedAt": 1787302945401,
+      "durationMs": 14676,
+      "eventCount": 50463,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000011.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "55b1ffe9-79f7-43a5-a74d-ecbddde02c6b",
+      "segmentIndex": 11,
+      "startedAt": 1787302945898,
+      "stoppedAt": 1787302960401,
+      "durationMs": 14503,
+      "eventCount": 235704,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000012.jsonl",
+      "status": "completed"
+    },
+    {
+      "segmentId": "c351ee1d-5bd1-4614-be3f-4c8d16b5ee64",
+      "segmentIndex": 12,
+      "startedAt": 1787302962607,
+      "stoppedAt": 1787302964834,
+      "durationMs": 2227,
+      "eventCount": 105855,
+      "filePath": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/trace.segment.000013.jsonl",
+      "status": "completed"
+    }
+  ],
+  "totalDurationMs": 166836,
+  "totalEventCount": 2092411,
+  "startedAt": 1787302780389,
+  "stoppedAt": 1787302964834,
+  "dataLossOccurred": true,
+  "maxSwitchGapMs": 4170
+}

@@ -1,0 +1,148 @@
+{
+  "label": "storefront",
+  "runRoot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_27_00-js",
+  "writtenAt": "2026-08-21T08:30:16.029Z",
+  "steps": [
+    {
+      "index": 1,
+      "ts": "2026-08-21T08:27:00.563Z",
+      "name": "open_home",
+      "ok": true,
+      "url": "http://localhost:7770/",
+      "screenshot": "driver-screenshots/001-open-home.png"
+    },
+    {
+      "index": 2,
+      "ts": "2026-08-21T08:27:03.744Z",
+      "name": "category_browse",
+      "ok": true,
+      "url": "http://localhost:7770/tweezers-for-succulents-duo.html",
+      "categoryUrl": "http://localhost:7770/tweezers-for-succulents-duo.html",
+      "title": "Tweezers For Succulents Duo",
+      "screenshot": "driver-screenshots/002-category-browse.png"
+    },
+    {
+      "index": 3,
+      "ts": "2026-08-21T08:27:28.732Z",
+      "name": "product_detail",
+      "ok": true,
+      "url": "http://localhost:7770/tweezers-for-succulents-duo.html",
+      "title": "Tweezers For Succulents Duo",
+      "price": "$19.99",
+      "reviews": "has-reviews",
+      "screenshot": "driver-screenshots/003-product-detail.png"
+    },
+    {
+      "index": 4,
+      "ts": "2026-08-21T08:28:01.646Z",
+      "name": "search_discovery",
+      "ok": true,
+      "url": "http://localhost:7770/catalogsearch/result/?q=phone+case",
+      "term": "phone case",
+      "results": 62,
+      "screenshot": "driver-screenshots/004-search-discovery.png"
+    },
+    {
+      "index": 5,
+      "ts": "2026-08-21T08:28:12.454Z",
+      "name": "category_browse_2",
+      "ok": true,
+      "url": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "categoryUrl": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "title": "Beauty & Personal Care",
+      "screenshot": "driver-screenshots/005-category-browse-2.png"
+    },
+    {
+      "index": 6,
+      "ts": "2026-08-21T08:28:15.969Z",
+      "name": "product_detail_2",
+      "ok": true,
+      "url": "http://localhost:7770/beauty-personal-care.html?p=2",
+      "title": "Beauty & Personal Care",
+      "price": "$19.99",
+      "reviews": "no-reviews",
+      "screenshot": "driver-screenshots/006-product-detail-2.png"
+    },
+    {
+      "index": 7,
+      "ts": "2026-08-21T08:28:47.952Z",
+      "name": "login_ensure",
+      "ok": true,
+      "url": "http://localhost:7770/customer/account",
+      "loggedIn": true,
+      "method": "register",
+      "account": "wa.tracer.1787300819721@example.com",
+      "screenshot": "driver-screenshots/007-login-ensure.png"
+    },
+    {
+      "index": 8,
+      "ts": "2026-08-21T08:29:00.519Z",
+      "name": "add_to_cart",
+      "ok": true,
+      "url": "http://localhost:7770/tweezers-for-succulents-duo.html",
+      "added": true,
+      "attempts": 1,
+      "product": "Tweezers For Succulents Duo",
+      "screenshot": "driver-screenshots/008-add-to-cart.png"
+    },
+    {
+      "index": 9,
+      "ts": "2026-08-21T08:29:03.931Z",
+      "name": "cart_view",
+      "ok": true,
+      "url": "http://localhost:7770/checkout/cart",
+      "emptyCart": false,
+      "screenshot": "driver-screenshots/009-cart-view.png"
+    },
+    {
+      "index": 10,
+      "ts": "2026-08-21T08:29:05.995Z",
+      "name": "checkout",
+      "ok": true,
+      "url": "http://localhost:7770/checkout/#payment",
+      "placed": false,
+      "stuckAt": "http://localhost:7770/checkout/#payment",
+      "lastFilled": [],
+      "screenshot": "driver-screenshots/010-checkout.png"
+    },
+    {
+      "index": 11,
+      "ts": "2026-08-21T08:30:11.144Z",
+      "name": "order_history",
+      "ok": true,
+      "url": "http://localhost:7770/sales/order/history",
+      "orderRows": 0,
+      "screenshot": "driver-screenshots/011-order-history.png"
+    },
+    {
+      "index": 12,
+      "ts": "2026-08-21T08:30:12.959Z",
+      "name": "account_page",
+      "ok": true,
+      "url": "http://localhost:7770/customer/account",
+      "screenshot": "driver-screenshots/012-account-page.png"
+    }
+  ],
+  "okSteps": 12,
+  "totalSteps": 12,
+  "pageName": "webarena_shopping",
+  "site": "http://localhost:7770",
+  "adminSite": "http://localhost:7780",
+  "preset": "js",
+  "orderPlaced": false,
+  "accountEmail": "wa.tracer.1787300819721@example.com",
+  "profiles": [
+    {
+      "profileId": "5cdd5c41-5396-453b-b3e8-6feac6c06ff7",
+      "pageName": "webarena_shopping",
+      "status": "completed",
+      "title": "One Stop Market",
+      "url": "http://localhost:7770/",
+      "durationMs": 193828,
+      "networkEventCount": 9530,
+      "interactionCount": 0,
+      "warningCount": 0,
+      "traceDir": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_27_00-js/698D50C4_trace"
+    }
+  ]
+}

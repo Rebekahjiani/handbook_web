@@ -3,7 +3,7 @@ import {
   contextForWorkflow,
   contextModelMarkdown,
 } from "./context-model.mjs";
-import { shoppingAdapterFor } from "./workflows/shopping.mjs";
+import { shoppingAdapterFor, shoppingCollectionAction } from "./workflows/shopping.mjs";
 import { parseTaskRequirements } from "./capability-router.mjs";
 
 export const WORKFLOWS = [
@@ -279,10 +279,10 @@ export const WORKFLOWS = [
       /toolbar-amount|pages-item-next|limiter|per page|total.*result|page.*of|分页|每页|共.*件/i,
     coverage: /search|category|sort|filter|price|搜索|分类|筛选|排序/i,
     steps: [
-      "先按输出选择证明策略：只有 min/max 的价格范围任务使用精确类别内的升序/降序边界证明；要求完整名称或型号集合时使用 Advanced Search 的 Name 高精度集合并闭合分页。",
+      "先按输出选择证明策略：只有 min/max 的价格范围任务使用精确类别内的升序/降序边界证明；要求完整名称或型号集合时先用一个核心产品类型词做普通搜索，闭合小结果集后按品牌和硬约束筛选。",
       "边界证明分别构造价格升序与降序的规范类别 URL，直接带最大 `product_list_limit` 和排序参数；每页批量读取后按顺序选择第一个满足产品类型、品牌和其他硬约束的候选。",
       "完整集合证明把页面显示数量调到最大，记录总结果数和当前页身份；按 Next 逐页去重，只有没有 Next 或已覆盖总结果数时才停止。",
-      "完整集合若无法从主查询证明语义召回闭合，可执行一次产品类型的直接同义词 Name 查询；两次查询分别闭合分页后按商品 URL 合并去重。",
+      "完整集合若无法从主查询证明语义召回闭合，可执行一次单个产品类型同义词的普通搜索；两次查询分别闭合分页后按商品 URL 合并去重。",
       "先用列表标题筛选主商品身份；仅当标题语义确实歧义时才打开少量详情，不得为证明类别而绕行分类页或枚举导航菜单。目标作为主商品时可包含附件套装，目标仅作为附赠品时排除。",
       "从同一候选台账返回完整名称、最小价和最大价。",
     ],
@@ -294,7 +294,7 @@ export const WORKFLOWS = [
       "每个候选必须同时满足核心产品词和品牌；不能只因搜索命中就计入。",
       "品牌和产品类型可由标题或站点分类证明；不要要求自然语言同义词必须逐字出现在标题。",
       "优先把每页显示数量调到最大；通过规范 URL 一次设置分页量和排序，不要重复操作同一个下拉框。",
-      "完整列表的查询预算是一个 Advanced Search Name 主查询加至多一个直接同义词补充查询；仅 min/max 的边界证明不执行这两个查询。每个规范 URL 只读取一次。",
+      "完整列表的查询预算是一个单核心产品词主查询加至多一个直接同义词补充查询；仅 min/max 的边界证明不执行这两个查询。每个规范 URL 只读取一次。",
       "维护 `已访问页/总结果/已读取卡片/去重候选` 四个计数；任何一个无法解释时不得声称集合完整。",
       "召回补充查询只替换产品类型同义词，必须保留品牌与其他硬约束；不得给查询加引号制造精确短语搜索。即使主查询已有候选，只要完整聚合仍无法证明同义词召回闭合，也允许使用。合并后按商品 URL 去重，再统一做语义验收。",
       "完成分页后立刻计算并返回，不要为已确定的极值继续打开商品详情。",
@@ -1164,14 +1164,17 @@ function pageAdapterFor(item) {
 function workflowBudgets(definition, hasListAction) {
   const isCatalog = definition.id === "catalog-aggregation";
   const isSelection = definition.id === "product-selection";
+  const isSearch = definition.id === "search-discovery";
   return {
     finalStateGateRequiredBeforeSuccess: true,
     maxConsecutiveSameAction: 2,
     recoveryAttemptsMax: 2,
-    maxListPages: isCatalog ? 12 : null,
+    maxListPages: isCatalog ? 2 : null,
     loginBlockPolicy:
       "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
     listReadMaxCallsPerPageId: hasListAction ? 1 : null,
+    runtimeDistinctQueriesMax: isCatalog || isSelection ? 2 : isSearch ? 1 : null,
+    runtimeContractActionsMax: isCatalog ? 3 : isSelection ? 2 : isSearch ? 1 : null,
     customListEvaluateMaxCalls: hasListAction ? 0 : null,
     supplementalQueriesMax: isCatalog || isSelection ? 1 : 0,
     supplementalQueryAllowedOnlyWhen:
@@ -1365,14 +1368,22 @@ function hasWorkflowCapabilityEvidence(definition, modelContext) {
 
 function workflowExecutionContract(item, origin, siteKey) {
   const pageAdapter = pageAdapterFor(item);
-  const listAction = item.definition.id === "category-navigation"
+  let listAction = item.definition.id === "category-navigation"
     ? null
     : listReadContract(pageAdapter.structures) || pageAdapter.actions?.[0] || null;
-  const adapterActions = item.definition.id === "category-navigation"
+  let adapterActions = item.definition.id === "category-navigation"
     ? []
     : Array.isArray(pageAdapter.actions) ? pageAdapter.actions : [];
   const mutation = mutationPolicy(item.definition, pageAdapter.forms);
   const submissionAction = answerEvidenceSubmissionAction(item.definition);
+  const program = siteKey === "shopping" &&
+    ["catalog-aggregation", "product-selection", "search-discovery", "order-aggregation", "order-lookup"].includes(item.definition.id)
+    ? shoppingCollectionAction(listAction, workflowBudgets(item.definition, Boolean(listAction)).maxListPages || 12)
+    : null;
+  if (program) {
+    adapterActions = adapterActions.map(action => action.actionId === listAction.actionId ? program : action);
+    listAction = program;
+  }
   const readActions = adapterActions.length ? adapterActions : listAction ? [listAction] : [];
   const contractActions = [...readActions, ...(submissionAction ? [submissionAction] : [])];
   const finalStateGate = {
@@ -1427,7 +1438,7 @@ function workflowExecutionContract(item, origin, siteKey) {
           {
             kind: "browser.evaluate",
             when: "extracting product-list cards",
-            reason: "Use read_current_list_page_v1 exactly once per pageId.",
+            reason: `Use ${listAction.actionId} exactly once per pageId.`,
           },
           {
             kind: "incremental-card-observation",
@@ -1437,7 +1448,7 @@ function workflowExecutionContract(item, origin, siteKey) {
         ]
       : [],
     budgets: workflowBudgets(item.definition, Boolean(listAction)),
-    ...(item.definition.id === "catalog-aggregation"
+    ...(item.definition.id === "catalog-aggregation" && !program
       ? {
           queryPlan: {
             strategyByOutput: {
@@ -1449,20 +1460,22 @@ function workflowExecutionContract(item, origin, siteKey) {
                 stop: "both boundaries have accepted candidates with page and sort provenance",
               },
               completeCollection: {
-                strategy: "brand-search-category-facet",
+                strategy: "single-product-type-search-first",
                 searchPath: "/catalogsearch/result/",
                 queryParameter: "q",
-                queryValue: "the exact requested brand only",
-                requiredFacet: "the narrowest category matching the requested product type",
+                queryValue: "one core product-type term only; do not include the brand or form a multiword query",
+                primaryStop: "if the result fits in the maximum observed page size, read it once and filter returned items by brand and all hard constraints",
+                broadResultFallback: "only when the primary result exceeds the maximum observed page size, search the exact brand and apply the narrowest category facet matching the requested product type",
                 supplementalQueriesMax: 1,
-                stop: "the category-filtered result fits in the maximum observed page size and every ambiguous candidate has exact constraint evidence",
-                exactFacetMissingFallback: "run one direct brand plus primary product-type query; do not enumerate navigation menus; stop if the result cannot fit in the maximum observed page size",
+                stop: "the primary or category-filtered result fits in the maximum observed page size and every ambiguous candidate has exact constraint evidence",
+                exactFacetMissingFallback: "stop; do not enumerate navigation menus or use Advanced Search Name",
               },
             },
             actionBudget: {
               menuEnumerationMax: 0,
+              primaryTypeQueriesMax: 1,
               categoryFacetSelectionsMax: 3,
-              directTypeFallbackQueriesMax: 1,
+              synonymQueriesMax: 1,
               repeatedCanonicalUrlMax: 1,
             },
             pageSizeParameter: "product_list_limit",
@@ -1473,6 +1486,7 @@ function workflowExecutionContract(item, origin, siteKey) {
               "navigation-menu enumeration",
               "reading or paginating the unfiltered brand-search collection",
               "multiword ordinary search whose OR semantics expands the collection",
+              "Advanced Search Name for multi-term product discovery",
               "product details unless a list title lacks an exact hard-constraint term",
             ],
           },
@@ -1513,14 +1527,17 @@ function workflowExecutionContract(item, origin, siteKey) {
           },
           failureAction: "reject_success_or_fallback",
         },
-    ir: workflowIR(contractItem, pageAdapter, listAction, submissionAction, mutation, finalStateGate),
+    ir: {
+      ...workflowIR(contractItem, pageAdapter, listAction, submissionAction, mutation, finalStateGate),
+      ...(program ? { allowedActions: [...contractActions.map(action => action.actionId), FINAL_STATE_GATE_ID] } : {}),
+    },
   };
 }
 
-function runtimeContract(executionContract) {
+export function runtimeContract(executionContract) {
   const ir = executionContract.ir || {};
   const action = (executionContract.actions || []).find(
-    (item) => item.kind === "browser.evaluate",
+    (item) => ["browser.evaluate", "browser.runCode"].includes(item.kind),
   );
   return {
     workflow: executionContract.workflow,
@@ -1552,7 +1569,9 @@ function runtimeContract(executionContract) {
               route: executionContract.siteKeys?.[0],
               contract_path: `webarena-${executionContract.siteKeys?.[0]}/references/execution-contract.json`,
               page_id: "$CURRENT_URL",
+              ...(action.inputSchema ? { arguments: {} } : {}),
             },
+            ...(action.inputSchema ? { inputSchema: action.inputSchema } : {}),
             required_first_step: true,
             call: "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。",
           },
@@ -1608,9 +1627,36 @@ function stateVariables(definition) {
   ];
 }
 
+export function executableSkillMarkdown(contract, siteName) {
+  const program = contract.actions.find(action => action.inputSchema);
+  return [
+    "---", `name: ${slugForSkill(siteName)}-${contract.workflow}`,
+    "description: 参数化集合读取程序；自动分页、去重与完整性验证。", "---", "",
+    `# ${contract.title}`, "",
+    `调用 localweb_contract_action：action_id=${program.actionId}，workflow=${contract.workflow}，route=shopping，contract_path=webarena-shopping/references/execution-contract.json，page_id=当前 URL，arguments=业务参数对象。`,
+    `参数：${JSON.stringify(program.inputSchema)}`, "",
+    program.sourceActionId === "read_order_history_page_v1"
+      ? "先使用已有认证会话进入 /sales/order/history/ 第一页。status 仅用于明确的精确状态；日期上下界均包含当天，只有任务明确指定时才传入。程序返回过滤后的 orders、每条来源 pageId 和整集合扫描证明。"
+      : "先进入目标分类或站内搜索第一页；普通搜索先用一个核心产品类型词。程序按当前页面已观察到的最大分页量读取并沿 Next 自动翻页，返回 items 和来源。nameContains 仅用于确定的字面子串过滤；存在同义词、类别或属性歧义时省略，读取后判断，必要时查详情。",
+    "程序通过 Playwright 页面导航和实时 DOM 读取执行，结束时浏览器位于最后读取页；不使用 HTTP、文件或数据库捷径。complete 只证明该查询/分类分页闭合，不证明自然语言查询召回完整，也不证明所有业务条件已满足。",
+    `一次调用预留 maxPages 页预算（默认 ${program.inputSchema.properties.maxPages.default}）；需要两次查询时先显式分配页预算，不能靠多次调用绕过工作流总预算。不要在程序外重写分页、反复读取同一集合或重新抄写抽取代码。`,
+    ...(contract.ir.selectionContract ? [`选择规则：${JSON.stringify(contract.ir.selectionContract)}`] : []),
+    ...contract.actions.filter(action => action.sourceActionId !== program.sourceActionId && action.actionId !== program.actionId && action.kind === "browser.evaluate").map(action => `需要商品行金额/品类证据时打开匹配订单详情，调用 action_id=${action.actionId}；订单总金额不能代替商品行 subtotal。`),
+    "ok=false 或 complete=false 时不得把部分记录当完整答案。根据 errors 修正前置页面或报告缺失证据；工具预算拒绝后停止浏览，不能用猜测补齐数据。",
+    "保留任务原有的状态与输出 schema；NOT_FOUND_ERROR 的 retrieved_data 为 null。NAVIGATE 必须实际打开选中的目标 URL，并读取最终状态。",
+    ...(contract.answerEvidenceGate.submitActionId ? [`RETRIEVE 回答前调用 action_id=${contract.answerEvidenceGate.submitActionId}，提交 evidence_ledger={evidenceStatus:'verified',result:最终答案,evidenceRecordIds:[记录ID],filters:{实际条件},ledger:{records:[带 pageId 的证据]}}；只有已验证集合及业务筛选能支持该答案时才提交。`] : []),
+    "最后用 snapshot/evaluate 读取当前页面状态；不要把证据台账添加到任务未要求的答案字段。", "",
+  ].join("\n");
+}
+
 function runtimeSkillMarkdown(item, siteName, origin, routeHints, minimalRuntime = false) {
   const { definition, modelContext, locators } = item;
   const pageAdapter = pageAdapterFor(item);
+  if (item.siteKeys?.includes("shopping")) {
+    const contract = workflowExecutionContract(item, origin, "shopping");
+    const program = contract.actions.find(action => action.inputSchema);
+    if (program) return executableSkillMarkdown(contract, siteName);
+  }
   if (minimalRuntime) {
     const executionContract = workflowExecutionContract(
       { ...item, siteKeys: item.siteKeys || [] },
@@ -1690,15 +1736,16 @@ function runtimeSkillMarkdown(item, siteName, origin, routeHints, minimalRuntime
     );
     if (definition.id === "catalog-aggregation") {
       lines.push(
-        "- 强制先按输出分流：只有 `min/max` 时执行 `CATEGORY_ASC_BOUNDARY → CATEGORY_DESC_BOUNDARY → SUBMIT_EVIDENCE_LEDGER`；要求完整名称/型号时执行 `BRAND_SEARCH → EXACT_PRODUCT_CATEGORY_FACET → MAX_PAGE_SIZE → READ_FILTERED_COLLECTION → VERIFY_AMBIGUOUS_CANDIDATES → SUBMIT_EVIDENCE_LEDGER`。",
+        "- 强制先按输出分流：只有 `min/max` 时执行 `CATEGORY_ASC_BOUNDARY → CATEGORY_DESC_BOUNDARY → SUBMIT_EVIDENCE_LEDGER`；要求完整名称/型号时执行 `SINGLE_PRODUCT_TYPE_SEARCH → MAX_PAGE_SIZE → READ_COLLECTION → FILTER_BRAND_AND_CONSTRAINTS → VERIFY_AMBIGUOUS_CANDIDATES → SUBMIT_EVIDENCE_LEDGER`。",
         "- `min/max` 分支从已观察到的分类路径中选择语义最精确的一条，直接构造带 `product_list_limit=<最大值>&product_list_order=price&product_list_dir=asc|desc` 的两个 URL。按排序从第一页开始，每个方向的第一个合格候选就是该边界；不得先跑宽泛站内搜索。",
-        "- 完整列表分支只用任务中的品牌做普通搜索，随后立即应用与任务产品类型完全匹配的分类 facet；不得读取或分页未加分类的品牌结果，也不得把品牌、属性、产品类型拼成普通多词查询（该站点会按 OR 扩张结果）。",
-        "- 品牌搜索中若向下选择三次分类 facet 后仍没有产品类型的精确 facet，立即停止 facet/菜单探索；只允许一次 `品牌 + 核心产品词` 的直接查询。该结果无法装入页面观察到的最大分页量时停止，不得分页宽集合或继续改写查询。",
-        "- 分类 facet 生效后，在第一次机器读取前把分页量设为页面已观察到的最大值；若 toolbar 总数仍大于该值，停止并返回 NOT_FOUND_ERROR，不得跨页猜测集合边界。",
+        "- 完整列表分支先只用一个核心产品类型词做普通搜索，不得加入品牌、属性或第二个产品词（该站点的普通多词搜索会按 OR 扩张结果），也不得使用 Advanced Search Name。",
+        "- 第一个结果页先读取 toolbar 总数和最大分页量；若总数不超过最大分页量，直接用规范 URL 一次批量读取，再在返回的 `items` 上按品牌与全部硬约束筛选，不得探索分类菜单。",
+        "- 只有单核心产品词结果确实超过最大分页量时，才允许改用品牌搜索并向下选择最多三次精确产品分类 facet；仍无法得到可闭合集合就停止，不得枚举菜单、改写多词查询或使用 Advanced Search。",
         "- 到达每个规范列表 URL 后的第一个读取动作必须是 `localweb_contract_action`；不得插入菜单枚举、自定义列表 evaluate，或重复操作排序/分页量下拉框。",
         "- 品牌与产品类型直接在返回的 `items` 上验收；每个入选标题必须同时满足任务中的品牌和产品类型词，不能只满足其中一个。标题缺少任务中的精确属性词时才打开详情，并且必须找到该属性词的明确证据才能入选。`wireless` 不能替代 `Bluetooth`，找不到 Bluetooth 证据就拒绝候选。",
         "- `names` 必须逐字符使用列表页返回的 `item.name`，不得手工改写、补全或修正标点；最终数组只能来自 `accepted_candidates`，不能混入未通过全部硬约束的搜索结果。",
         "- 同一规范 URL 只允许一次列表读取；禁止枚举导航菜单，禁止自定义 browser evaluate 抽取分类或商品卡片。最多读取 12 个分页；超过上限仍无法证明候选集合完整时，停止并返回 NOT_FOUND_ERROR，不得继续循环消耗步骤。",
+        "- **budget 耗尽停止（机器状态）**：本规则仅在收到 `contract_action_rejected: workflow browser.evaluate budget exceeded` 或 `contract_action_rejected: workflow contract-action budget exceeded` 信号后触发；在收到该信号之前，必须正常执行工具调用，不得跳过浏览步骤。触发后：立即停止所有浏览器探索（navigate/snapshot/find/click 均不得再发起）；由于 evidence_ledger 提交需要额外的 contract_action 调用而预算已耗尽，必须直接返回 `NOT_FOUND_ERROR`（retrieved_data: null），不得声明 SUCCESS。禁止在 budget 耗尽后继续导航或试图读取更多商品页。禁止凭记忆或推断填写 retrieved_data，所有数据必须来自本次运行实际观测。基础设施错误（`contract_action_failed: localweb MCP is unavailable` 等）不触发此规则，允许重试一次。",
       );
     }
     if (definition.id === "product-selection") {
@@ -2016,7 +2063,7 @@ function handbookMarkdown(
       pathLine("机器执行契约", artifactRoot && `${artifactRoot}/references/execution-contract.json`),
     ].filter(Boolean),
     "",
-    "任务执行时以命中的 runtime contract 为直接输入；原始 trace 只用于审计、定位证据缺口和重建 Context Model，不应默认整批注入 Agent。",
+    "在 `baselineB_skill_routed` 条件下，每次只把命中的一个 `runtime-skills/<route>/SKILL.md` 作为 Skill 文本注入 Agent。Runner 另行读取 `execution-contract.json` 中命中工作流的切片，把 preflight guards、Workflow IR 和 contract-action bridge 指令写入 prompt，并用该切片执行机器审计；不会把整个契约文件、顶层 `SKILL.md` 或全部 runtime Skills 原样注入。原始 trace 只用于审计、定位证据缺口和重建 Context Model，不应默认整批注入 Agent。",
     "",
     "## 使用方法",
     "",

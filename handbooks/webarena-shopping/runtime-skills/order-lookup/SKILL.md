@@ -1,78 +1,19 @@
 ---
 name: webarena-shopping-order-lookup
-description: webarena-shopping 的订单查找与已购商品属性工作流。
+description: 参数化集合读取程序；自动分页、去重与完整性验证。
 ---
-
-# 运行规则
-
-- 只执行当前路由；保持目标、硬约束和已验证证据台账，不改变任务口径。
-- 每页/每个对象只读取一次；动作失败后重新读取当前状态，最多恢复两次，仍失败就停止。
-- 非认证任务遇到登录页或登录失败时停止，不猜凭据、不重复提交。
-- 成功必须有最终状态证据；中断、证据缺失和空结果不得包装成 SUCCESS。
-- 最终响应服从任务给出的 expected status：若为 `NOT_FOUND_ERROR`，`retrieved_data` 必须是 JSON `null`，不能返回 `[]`、`[0]` 或 `[0.0]`。
 
 # 订单查找与已购商品属性
 
-站点：`http://localhost:7770`
-机器契约：`../../references/execution-contract.json#workflows-order-lookup`
+调用 localweb_contract_action：action_id=collect_order_history_v1，workflow=order-lookup，route=shopping，contract_path=webarena-shopping/references/execution-contract.json，page_id=当前 URL，arguments=业务参数对象。
+参数：{"type":"object","additionalProperties":false,"properties":{"maxPages":{"type":"integer","minimum":1,"maximum":12,"default":12},"status":{"type":"string","description":"Exact observed status, case insensitive."},"dateFrom":{"type":"string","description":"Inclusive YYYY-MM-DD lower bound."},"dateTo":{"type":"string","description":"Inclusive YYYY-MM-DD upper bound."}}}
 
-## 前置条件
-
-- 从任务中明确目标、硬约束、比较器和成功页面；没有出现的条件不得自行补充。
-- 先确认当前页面属于该站点，并验证将要使用的 selector 或链接仍然存在。
-
-## 状态变量
-
-- `target_period`：时间范围或顺序要求
-- `target_status`：任务要求的订单状态
-- `visited_page_ids`：已处理订单页 URL 集合
-- `seen_record_ids`：已读取订单号集合
-- `accepted_records`：满足时间与状态条件的订单台账
-- `next_href`：唯一待访问的下一页；无下一页时为 `null`
-
-## 答案证据提交
-
-- 最终回答前必须调用一次 `localweb_contract_action`：`action_id=submit_answer_evidence_v1`、`workflow=order-lookup`、`route=shopping`、`contract_path=webarena-shopping/references/execution-contract.json`、`page_id=当前 URL`，并通过 `evidence_ledger` 参数提交台账。
-- `evidence_ledger.evidenceStatus` 仅在所有查询/分页或排序边界证明完成、候选验收完成且结果可由同一台账重算时写 `verified`；同时包含 `result`、非空 `evidenceRecordIds`、实际 `filters` 和含页面来源的 `ledger`。否则不得调用提交动作或声明 SUCCESS。
-- 参数形状固定为 `evidence_ledger={"evidenceStatus":"verified","result":<与最终答案相同的值或对象>,"evidenceRecordIds":["记录ID"],"filters":{"字段":"实际条件"},"ledger":{"records":[{"recordId":"记录ID","pageId":"来源URL","value":"证据值"}]}}`；`filters` 和 `ledger` 必须是对象，不能写成字符串或数组。
-- 提交动作返回 `evidenceLedger` 后，最终 JSON 只保留 benchmark 要求的字段；不要把审计台账塞进 `retrieved_data` 或增加任务未要求的答案字段。
-
-## 循环动作
-
-1. 先判定任务是单对象查找还是集合查找；进入订单历史并把每页行数据一次性读取为短台账，记录页面身份、行数与 Next。
-2. 按日期、状态或商品名称筛选；查找“最近”记录时按页面显示日期比较。
-3. 从目标行的实时详情链接进入详情，并核对订单号。
-4. 读取任务要求的字段或商品选项，保留页面显示的单位和格式。
-
-## 停止条件与必检项
-
-- 分页后废弃旧引用；不要根据订单号拼接详情 URL。
-- 查找最近状态时，一旦已按时间倒序确认首个精确状态匹配即可停止。
-- 任务含 `all`、完整年份或日期范围时属于集合查找：必须覆盖整个范围并保存全部候选，不能找到第一项就停止。
-- 按已购商品查找时，先穷尽目标日期范围内的订单行，再逐个打开候选详情；不要在订单页和站内搜索间循环。
-- 无匹配必须有终页证据：完整当前页没有 Next，且已访问行数与页面报告的总数一致。
-- 商品尺寸、容量等属性必须保留单位，例如 `16 inch`，不能只返回裸数字。
-- 无匹配时导航回不带分页参数的订单历史首页，并返回 NOT_FOUND 与 null。
-- 成功判据未被页面证据证明时继续；`next_action` 为空或动作开始重复时停止并进入失败恢复。
-
-## 操作锚点
-
-- View All：`locator("a.action[href=\"${SITE_ORIGIN}/customer/account/#my-orders-table\"]")`（confidence=0.65，evidence=unique,scoped）
-
-## 最终状态闸门
-
-- 报告 SUCCESS 前，最后一次浏览器工具调用必须是 `localweb_browser_snapshot` 或 `localweb_browser_evaluate`；navigate/click 后必须再读取当前状态。
-- 按前置 Workflow IR 的 `postStateGate` 完成 URL、标题/目标对象和结果证据校验；闸门通过前不得报告 SUCCESS。
-
-## 完成证明
-
-- 找到目标：列表行与详情页订单号一致，且目标条件有行级证据。——无匹配：已记录终页证据（末页 URL、已访问行数、页面报告总数一致），再回到订单历史首页结束。两种情况必须满足其中之一。
-- 返回值保留页面显示的单位；不得靠猜测或拼接 URL 构造结果。
-
-## 失败恢复
-
-- selector 失效时重新读取当前页面结构；不要盲点旧坐标或重复同一动作。
-- 候选、分页或页面状态无法证明完整时，保留已有台账并报告缺失证据，不得猜测成功。
-
-风险：查看订单通常无副作用；Reorder、取消或退货属于写操作，不要代替用户提交。
-
+先使用已有认证会话进入 /sales/order/history/ 第一页。status 仅用于明确的精确状态；日期上下界均包含当天，只有任务明确指定时才传入。程序返回过滤后的 orders、每条来源 pageId 和整集合扫描证明。
+程序通过 Playwright 页面导航和实时 DOM 读取执行，结束时浏览器位于最后读取页；不使用 HTTP、文件或数据库捷径。complete 只证明该查询/分类分页闭合，不证明自然语言查询召回完整，也不证明所有业务条件已满足。
+一次调用预留 maxPages 页预算（默认 12）；需要两次查询时先显式分配页预算，不能靠多次调用绕过工作流总预算。不要在程序外重写分页、反复读取同一集合或重新抄写抽取代码。
+选择规则：{"entity":"order_set","preserveTaskConstraints":["exact_date","product_category","status"],"detailEvidenceRequired":true,"categoryMatch":"品类判定（本数据集校准，必须逐行执行）：(a) 食品 food/cooking/food-related 包含烘焙食品（corn muffin mix 等杂粮粉/松饼）、即食餐（MRE/beef cholent）、食品饮料（chai、橙汁/果汁）以及直接用于食品的装饰（cake topper 彩虹生日派对用品/蛋糕装饰件）；(b) hair care/hair style 只包含护理与染发产品（conditioner 护发素、haircolor/hair dye 染发剂），不包含身体护理（body butter/body lotion 身体乳）与纯装饰配件（hairbands 发箍、pearl jewelry 发夹）；(c) 若商品名与目标类别同属一并含装饰配件字样，按用途判断：用于食品的装饰计入 food；(d) 未列入上述的明显不相关商品不计入","amountFieldByConstraint":{"excludeShippingAndHandling":"item_subtotal","includeShippingAndHandling":"grand_total"},"aggregation":"sum only accepted item lines after exact date/category/status checks; past N months 的下界 = 任务日期减 N×30 天（严格晚于该日期），过去 N 天同理严格晚于下界，禁止按日历月/月初计算"}
+需要商品行金额/品类证据时打开匹配订单详情，调用 action_id=read_order_detail_items_v1；订单总金额不能代替商品行 subtotal。
+ok=false 或 complete=false 时不得把部分记录当完整答案。根据 errors 修正前置页面或报告缺失证据；工具预算拒绝后停止浏览，不能用猜测补齐数据。
+保留任务原有的状态与输出 schema；NOT_FOUND_ERROR 的 retrieved_data 为 null。NAVIGATE 必须实际打开选中的目标 URL，并读取最终状态。
+RETRIEVE 回答前调用 action_id=submit_answer_evidence_v1，提交 evidence_ledger={evidenceStatus:'verified',result:最终答案,evidenceRecordIds:[记录ID],filters:{实际条件},ledger:{records:[带 pageId 的证据]}}；只有已验证集合及业务筛选能支持该答案时才提交。
+最后用 snapshot/evaluate 读取当前页面状态；不要把证据台账添加到任务未要求的答案字段。

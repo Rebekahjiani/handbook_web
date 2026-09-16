@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-01T07:40:45.304Z",
+  "generatedAt": "2026-09-14T08:17:29.285Z",
   "site": {
     "key": "shopping",
     "name": "webarena-shopping",
@@ -81,7 +81,7 @@
         }
       },
       "allowedActions": [
-        "read_order_history_page_v1",
+        "collect_order_history_v1",
         "read_order_detail_items_v1",
         "verify_final_state_v1",
         "submit_answer_evidence_v1"
@@ -139,11 +139,36 @@
       ],
       "actions": [
         {
-          "actionId": "read_order_history_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_order_history_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-order-history-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "status": {
+                "type": "string",
+                "description": "Exact observed status, case insensitive."
+              },
+              "dateFrom": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD lower bound."
+              },
+              "dateTo": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD upper bound."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "row": "table#my-orders-table.history > tbody > tr",
             "fields": {
@@ -158,32 +183,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    recordId: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
+          "sourceActionId": "read_order_history_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_order_history_v1\",\"orders\":true,\"selectors\":{\"row\":\"table#my-orders-table.history > tbody > tr\",\"fields\":{\"orderNumber\":\":scope > td[data-th=\\\"Order #\\\"]\",\"purchaseDate\":\":scope > td[data-th=\\\"Date\\\"]\",\"grandTotal\":\":scope > td[data-th=\\\"Order Total\\\"] .price\",\"status\":\":scope > td[data-th=\\\"Status\\\"]\",\"detailLink\":\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
           "requiredOutput": {
-            "actionId": "read_order_history_page_v1",
             "requiredKeys": [
               "ok",
-              "evidenceStatus",
-              "pageId",
-              "totalText",
-              "itemCount",
-              "orders",
-              "nextHref",
               "complete",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "orders",
               "errors"
             ],
-            "itemKeys": [
-              "orderNumber",
-              "purchaseDate",
-              "grandTotalText",
-              "status",
-              "detailUrl",
-              "evidenceStatus"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals orders.length",
-              "each order has identity, date, status and detail URL"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         },
@@ -361,7 +376,8 @@
           "visualAnchors": []
         },
         "allowedActions": [
-          "read_order_history_page_v1",
+          "collect_order_history_v1",
+          "read_order_detail_items_v1",
           "verify_final_state_v1",
           "submit_answer_evidence_v1"
         ],
@@ -512,7 +528,7 @@
         }
       },
       "allowedActions": [
-        "read_order_history_page_v1",
+        "collect_order_history_v1",
         "read_order_detail_items_v1",
         "verify_final_state_v1",
         "submit_answer_evidence_v1"
@@ -544,11 +560,36 @@
       },
       "actions": [
         {
-          "actionId": "read_order_history_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_order_history_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-order-history-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "status": {
+                "type": "string",
+                "description": "Exact observed status, case insensitive."
+              },
+              "dateFrom": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD lower bound."
+              },
+              "dateTo": {
+                "type": "string",
+                "description": "Inclusive YYYY-MM-DD upper bound."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "row": "table#my-orders-table.history > tbody > tr",
             "fields": {
@@ -563,32 +604,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rows = [...document.querySelectorAll(\"table#my-orders-table.history > tbody > tr\")];\n  const read = (row, selector) => row.querySelector(selector)?.textContent.trim() || \"\";\n  const orders = rows.map(row => ({\n    recordId: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    orderNumber: read(row, \":scope > td[data-th=\\\"Order #\\\"]\"),\n    purchaseDate: read(row, \":scope > td[data-th=\\\"Date\\\"]\"),\n    grandTotalText: read(row, \":scope > td[data-th=\\\"Order Total\\\"] .price\"),\n    status: read(row, \":scope > td[data-th=\\\"Status\\\"]\"),\n    detailUrl: row.querySelector(\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\")?.href || \"\"\n  }));\n  const completeOrder = order => Boolean(order.orderNumber && order.purchaseDate && order.status && order.detailUrl);\n  if (!rows.length) errors.push(\"order-history-empty-or-selector-mismatch\");\n  if (orders.some(order => !order.orderNumber || !order.purchaseDate || !order.status || !order.detailUrl)) {\n    errors.push(\"required-order-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next || next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") || Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  return {\n    actionId: \"read_order_history_page_v1\",\n    ok: errors.length === 0,\n    evidenceStatus: errors.length === 0 ? \"verified\" : \"evidence_incomplete\",\n    pageId: location.href,\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    itemCount: orders.length,\n    orders: orders.map(order => ({ ...order, evidenceStatus: completeOrder(order) ? \"verified\" : \"evidence_incomplete\" })),\n    nextHref: nextDisabled ? null : next.href || null,\n    complete: nextDisabled,\n    errors\n  };\n}",
+          "sourceActionId": "read_order_history_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_order_history_v1\",\"orders\":true,\"selectors\":{\"row\":\"table#my-orders-table.history > tbody > tr\",\"fields\":{\"orderNumber\":\":scope > td[data-th=\\\"Order #\\\"]\",\"purchaseDate\":\":scope > td[data-th=\\\"Date\\\"]\",\"grandTotal\":\":scope > td[data-th=\\\"Order Total\\\"] .price\",\"status\":\":scope > td[data-th=\\\"Status\\\"]\",\"detailLink\":\":scope > td[data-th=\\\"Actions\\\"] > a.action.view\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
           "requiredOutput": {
-            "actionId": "read_order_history_page_v1",
             "requiredKeys": [
               "ok",
-              "evidenceStatus",
-              "pageId",
-              "totalText",
-              "itemCount",
-              "orders",
-              "nextHref",
               "complete",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "orders",
               "errors"
             ],
-            "itemKeys": [
-              "orderNumber",
-              "purchaseDate",
-              "grandTotalText",
-              "status",
-              "detailUrl",
-              "evidenceStatus"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals orders.length",
-              "each order has identity, date, status and detail URL"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         },
@@ -766,7 +797,8 @@
           "visualAnchors": []
         },
         "allowedActions": [
-          "read_order_history_page_v1",
+          "collect_order_history_v1",
+          "read_order_detail_items_v1",
           "verify_final_state_v1",
           "submit_answer_evidence_v1"
         ],
@@ -900,6 +932,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -1105,6 +1139,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -1296,6 +1332,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -1524,6 +1562,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -1724,6 +1764,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -1995,7 +2037,7 @@
         }
       },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "collect_product_pages_v1",
         "submit_answer_evidence_v1",
         "verify_final_state_v1"
       ],
@@ -2003,7 +2045,7 @@
         {
           "kind": "browser.evaluate",
           "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+          "reason": "Use collect_product_pages_v1 exactly once per pageId."
         },
         {
           "kind": "incremental-card-observation",
@@ -2015,68 +2057,44 @@
         "finalStateGateRequiredBeforeSuccess": true,
         "maxConsecutiveSameAction": 2,
         "recoveryAttemptsMax": 2,
-        "maxListPages": 12,
+        "maxListPages": 2,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
+        "runtimeDistinctQueriesMax": 2,
+        "runtimeContractActionsMax": 3,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
         "supplementalQueryAllowedOnlyWhen": "the task requires a complete aggregate or extrema and the primary storefront-search result cannot prove semantic recall closure; the supplemental query must replace only the product-type term with one direct lexical synonym while preserving brand and all hard constraints",
         "zeroSupplementalQueryBudgetAfterAcceptedCandidate": false,
         "broadCategoryDetoursForBrandFilterMax": 0
       },
-      "queryPlan": {
-        "strategyByOutput": {
-          "extremaOnly": {
-            "strategy": "category-boundary-proof",
-            "requiredOutputs": [
-              "min",
-              "max"
-            ],
-            "directions": [
-              "asc",
-              "desc"
-            ],
-            "accept": "first candidate in sorted order satisfying product type, brand, and all hard constraints",
-            "stop": "both boundaries have accepted candidates with page and sort provenance"
-          },
-          "completeCollection": {
-            "strategy": "brand-search-category-facet",
-            "searchPath": "/catalogsearch/result/",
-            "queryParameter": "q",
-            "queryValue": "the exact requested brand only",
-            "requiredFacet": "the narrowest category matching the requested product type",
-            "supplementalQueriesMax": 1,
-            "stop": "the category-filtered result fits in the maximum observed page size and every ambiguous candidate has exact constraint evidence",
-            "exactFacetMissingFallback": "run one direct brand plus primary product-type query; do not enumerate navigation menus; stop if the result cannot fit in the maximum observed page size"
-          }
-        },
-        "actionBudget": {
-          "menuEnumerationMax": 0,
-          "categoryFacetSelectionsMax": 3,
-          "directTypeFallbackQueriesMax": 1,
-          "repeatedCanonicalUrlMax": 1
-        },
-        "pageSizeParameter": "product_list_limit",
-        "pageSizePolicy": "put the largest observed limiter option in the canonical URL before the first contract read",
-        "sortParameters": {
-          "field": "product_list_order=price",
-          "direction": "product_list_dir=asc|desc"
-        },
-        "forbidQuotedPhraseRewrite": true,
-        "forbiddenDetours": [
-          "navigation-menu enumeration",
-          "reading or paginating the unfiltered brand-search collection",
-          "multiword ordinary search whose OR semantics expands the collection",
-          "product details unless a list title lacks an exact hard-constraint term"
-        ]
-      },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_product_pages_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2,
+                "default": 2
+              },
+              "nameContains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "item": "li.product-item",
             "fields": {
@@ -2090,32 +2108,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "sourceActionId": "read_current_list_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_product_pages_v1\",\"orders\":false,\"selectors\":{\"item\":\"li.product-item\",\"fields\":{\"name\":\"a.product-item-link\",\"price\":\".price-box .price\",\"link\":\"a.product-item-link\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"limiter\":\"select[data-role='limiter']\",\"total\":\".toolbar-amount\"}},\"maxPages\":2})",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
             "requiredKeys": [
               "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "items",
               "errors"
             ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         },
@@ -2302,7 +2310,7 @@
           "visualAnchors": []
         },
         "allowedActions": [
-          "read_current_list_page_v1",
+          "collect_product_pages_v1",
           "submit_answer_evidence_v1",
           "verify_final_state_v1"
         ],
@@ -2404,14 +2412,14 @@
         }
       },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "collect_product_pages_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
         {
           "kind": "browser.evaluate",
           "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+          "reason": "Use collect_product_pages_v1 exactly once per pageId."
         },
         {
           "kind": "incremental-card-observation",
@@ -2426,6 +2434,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
+        "runtimeDistinctQueriesMax": 2,
+        "runtimeContractActionsMax": 2,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 1,
         "supplementalQueryAllowedOnlyWhen": "zero accepted candidates satisfy target product type in the frozen primary result set",
@@ -2434,11 +2444,31 @@
       },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_product_pages_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "nameContains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "item": "li.product-item",
             "fields": {
@@ -2452,32 +2482,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "sourceActionId": "read_current_list_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_product_pages_v1\",\"orders\":false,\"selectors\":{\"item\":\"li.product-item\",\"fields\":{\"name\":\"a.product-item-link\",\"price\":\".price-box .price\",\"link\":\"a.product-item-link\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"limiter\":\"select[data-role='limiter']\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
             "requiredKeys": [
               "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "items",
               "errors"
             ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         }
@@ -2627,7 +2647,7 @@
           "visualAnchors": []
         },
         "allowedActions": [
-          "read_current_list_page_v1",
+          "collect_product_pages_v1",
           "verify_final_state_v1"
         ],
         "requiredNetworkEvents": [],
@@ -2734,14 +2754,14 @@
         }
       },
       "allowedActions": [
-        "read_current_list_page_v1",
+        "collect_product_pages_v1",
         "verify_final_state_v1"
       ],
       "forbiddenActions": [
         {
           "kind": "browser.evaluate",
           "when": "extracting product-list cards",
-          "reason": "Use read_current_list_page_v1 exactly once per pageId."
+          "reason": "Use collect_product_pages_v1 exactly once per pageId."
         },
         {
           "kind": "incremental-card-observation",
@@ -2756,6 +2776,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": 1,
+        "runtimeDistinctQueriesMax": 1,
+        "runtimeContractActionsMax": 1,
         "customListEvaluateMaxCalls": 0,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -2764,11 +2786,31 @@
       },
       "actions": [
         {
-          "actionId": "read_current_list_page_v1",
-          "kind": "browser.evaluate",
+          "actionId": "collect_product_pages_v1",
+          "kind": "browser.runCode",
           "deterministic": true,
-          "scope": "current-list-page",
+          "scope": "current-collection-browser-ui",
           "maxCallsPerPageId": 1,
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "default": 12
+              },
+              "nameContains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+              }
+            }
+          },
+          "pageBudgetParameter": "maxPages",
           "selectors": {
             "item": "li.product-item",
             "fields": {
@@ -2782,32 +2824,22 @@
               "total": ".toolbar-amount"
             }
           },
-          "javascript": "() => {\n  const errors = [];\n  const rawCards = [...document.querySelectorAll(\"li.product-item\")];\n  const cards = rawCards.filter(card =>\n    Boolean(card.offsetWidth || card.offsetHeight || card.getClientRects().length)\n  );\n  const items = cards.map(card => {\n    const nameNode = card.querySelector(\"a.product-item-link\");\n    const link = card.querySelector(\"a.product-item-link\");\n    const priceText = card.querySelector(\".price-box .price\")?.textContent || \"\";\n    const priceMatch = priceText.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/);\n    return {\n      name: nameNode?.textContent.trim() || \"\",\n      price: priceMatch ? Number(priceMatch[0]) : null,\n      url: link?.href || \"\"\n    };\n  });\n  if (items.length === 0) errors.push(\"product-list-empty-or-selector-mismatch\");\n  if (items.some(item => !item.name || !item.url || item.price === null)) {\n    errors.push(\"required-product-field-missing\");\n  }\n  const next = document.querySelector(\".pages .pages-item-next > a.action.next\");\n  const nextDisabled = !next ||\n    next.matches(\"[disabled], .disabled, [aria-disabled=\\\"true\\\"]\") ||\n    Boolean(next.closest(\".disabled, [aria-disabled=\\\"true\\\"]\"));\n  const nextHref = nextDisabled ? null : next.href || null;\n  const limiter = document.querySelector(\"select[data-role='limiter']\");\n  const limiterOptions = limiter\n    ? [...limiter.options].map(option => option.value).filter(Boolean)\n    : [];\n  return {\n    actionId: \"read_current_list_page_v1\",\n    ok: errors.length === 0,\n    pageId: JSON.stringify({\n      url: location.href,\n      itemCount: items.length,\n      firstUrl: items[0]?.url || \"\",\n      lastUrl: items.at(-1)?.url || \"\"\n    }),\n    totalText: document.querySelector(\".toolbar-amount\")?.textContent.trim() || \"\",\n    rawCardCount: rawCards.length,\n    ignoredCardCount: rawCards.length - cards.length,\n    itemCount: items.length,\n    items,\n    nextHref,\n    complete: nextHref === null,\n    currentLimiterValue: limiter?.value || null,\n    limiterOptions,\n    errors\n  };\n}",
+          "sourceActionId": "read_current_list_page_v1",
+          "javascript": "async (page, args = {}) => (async function collectShoppingPages(page, args, config) {\n  const { selectors: s, orders } = config;\n  const start = new URL(page.url());\n  const pages = [], records = new Map(), errors = [];\n  const allowed = orders ? [\"maxPages\", \"status\", \"dateFrom\", \"dateTo\"] : [\"maxPages\", \"nameContains\"];\n  const maxPages = args?.maxPages ?? config.maxPages;\n  const isoDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;\n  if (!args || typeof args !== \"object\" || Array.isArray(args) ||\n      Object.keys(args).some(key => !allowed.includes(key)) ||\n      !Number.isInteger(maxPages) || maxPages < 1 || maxPages > config.maxPages ||\n      [\"dateFrom\", \"dateTo\"].some(key => key in args && (typeof args[key] !== \"string\" || !isoDate(args[key]))) ||\n      (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) ||\n      (\"status\" in args && (typeof args.status !== \"string\" || !args.status.trim())) ||\n      (\"nameContains\" in args && (!Array.isArray(args.nameContains) || args.nameContains.some(term => typeof term !== \"string\" || !term.trim())))) {\n    return { actionId: config.actionId, ok: false, complete: false, pageId: start.href, pages, scannedCount: 0, [orders ? \"orders\" : \"items\"]: [], errors: [\"invalid_arguments\"] };\n  }\n  const canonical = raw => {\n    const url = new URL(raw, start);\n    url.hash = \"\";\n    url.searchParams.sort();\n    return url;\n  };\n  let url = canonical(start.href), total = null, nextHref = url.href;\n  const visited = new Set();\n  try {\n    if (start.searchParams.has(\"p\") && start.searchParams.get(\"p\") !== \"1\") throw new Error(\"start_page_not_first\");\n    if (orders ? !/^\\/sales\\/order\\/history\\/?$/.test(start.pathname) : !(start.pathname === \"/catalogsearch/result/\" || start.pathname.endsWith(\".html\"))) throw new Error(\"collection_surface_mismatch\");\n    const limiter = s.pagination?.limiter ? await page.evaluate(selector => {\n      const node = document.querySelector(selector);\n      return node ? { current: Number(node.value), sizes: [...node.options].map(option => Number(option.value)) } : null;\n    }, s.pagination.limiter) : null;\n    const sizes = limiter?.sizes.filter(size => Number.isInteger(size) && size > 0) || [];\n    if (sizes.length && limiter.current !== Math.max(...sizes)) {\n      url.searchParams.set(\"product_list_limit\", String(Math.max(...sizes)));\n      url = canonical(url.href);\n    }\n    while (nextHref) {\n      if (pages.length >= maxPages) throw new Error(\"page_budget_exceeded\");\n      if (visited.has(url.href)) throw new Error(\"pagination_cycle\");\n      if (url.origin !== start.origin || url.pathname !== start.pathname) throw new Error(\"pagination_scope_mismatch\");\n      const scope = value => { const u = new URL(value); u.searchParams.delete(\"p\"); return u.search; };\n      if (pages.length && scope(url) !== scope(pages[0].url)) throw new Error(\"pagination_query_changed\");\n      visited.add(url.href);\n      if (url.href !== canonical(page.url()).href) {\n        const response = await page.goto(url.href, { waitUntil: \"domcontentloaded\", timeout: 15000 });\n        if (!response?.ok()) throw new Error(\"page_navigation_failed\");\n        if (canonical(page.url()).href !== url.href) throw new Error(\"navigation_redirected\");\n      }\n      const observed = await page.evaluate(({ s, orders }) => {\n        const read = (node, selector) => selector ? node.querySelector(selector)?.textContent.trim() || \"\" : \"\";\n        const money = value => { const match = value.replace(/,/g, \"\").match(/\\d+(?:\\.\\d{1,2})?/); return match ? Number(match[0]) : null; };\n        const rows = [...document.querySelectorAll(s.row || s.item)].filter(row => row.getClientRects().length);\n        const values = rows.map(row => {\n          const f = s.fields;\n          const link = row.querySelector(orders ? f.detailLink : f.link)?.href || \"\";\n          return orders ? {\n            orderNumber: read(row, f.orderNumber), purchaseDate: read(row, f.purchaseDate),\n            grandTotalText: read(row, f.grandTotal), status: read(row, f.status), detailUrl: link,\n          } : { name: read(row, f.name), price: f.price ? money(read(row, f.price)) : null, url: link };\n        });\n        const next = document.querySelector(s.pagination.next);\n        const disabled = !next || next.matches('[disabled], .disabled, [aria-disabled=\"true\"]') || next.closest(\".disabled, [aria-disabled='true']\");\n        return { values, totalText: read(document, s.pagination.total), nextHref: disabled ? null : next.getAttribute(\"href\") ? next.href : \"\" };\n      }, { s, orders });\n      const numbers = observed.totalText.replace(/,/g, \"\").match(/\\d+/g);\n      const pageTotal = numbers ? Number(numbers.at(-1)) : null;\n      if (total !== null && pageTotal !== null && total !== pageTotal) throw new Error(\"collection_total_changed\");\n      total ??= pageTotal;\n      if (!observed.values.length && total !== 0) throw new Error(\"empty_or_selector_mismatch\");\n      for (const record of observed.values) {\n        const link = orders ? record.detailUrl : record.url;\n        if (!link) throw new Error(\"record_link_missing\");\n        if (new URL(link).origin !== start.origin) throw new Error(\"record_origin_mismatch\");\n        if (orders ? !record.orderNumber || !record.purchaseDate || !record.status || !record.grandTotalText : !record.name || (s.fields.price && record.price === null)) throw new Error(\"required_record_field_missing\");\n        const id = orders ? record.orderNumber : record.url;\n        if (records.has(id) && JSON.stringify(records.get(id).value) !== JSON.stringify(record)) throw new Error(\"record_changed_between_pages\");\n        if (!records.has(id)) records.set(id, { value: record, pageId: url.href });\n      }\n      if (observed.nextHref === \"\") throw new Error(\"next_link_missing\");\n      nextHref = observed.nextHref;\n      pages.push({ url: url.href, itemCount: observed.values.length, total: pageTotal, nextHref });\n      if (nextHref) url = canonical(nextHref);\n    }\n    if (total !== null && records.size !== total) throw new Error(\"collection_count_mismatch\");\n  } catch (error) {\n    errors.push(error.message);\n  }\n  const selected = [];\n  for (const [recordId, { value, pageId }] of records) {\n    if (orders) {\n      if (args.status && value.status.toLowerCase() !== args.status.toLowerCase()) continue;\n      if (args.dateFrom || args.dateTo) {\n        const parts = value.purchaseDate.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n        const date = parts ? `${parts[3]}-${parts[1].padStart(2, \"0\")}-${parts[2].padStart(2, \"0\")}` : value.purchaseDate;\n        if (!isoDate(date)) { errors.push(\"unparseable_purchase_date\"); break; }\n        if ((args.dateFrom && date < args.dateFrom) || (args.dateTo && date > args.dateTo)) continue;\n      }\n    } else if (args.nameContains?.some(term => !value.name.toLowerCase().includes(term.toLowerCase()))) continue;\n    selected.push({ ...value, recordId, pageId });\n  }\n  const complete = !errors.length && nextHref === null;\n  return {\n    actionId: config.actionId, ok: complete, complete,\n    evidenceStatus: complete ? \"verified\" : \"evidence_incomplete\",\n    pageId: start.href, finalPageId: page.url(), pages, scannedCount: records.size, total,\n    filters: args, itemCount: selected.length, [orders ? \"orders\" : \"items\"]: selected,\n    nextHref, errors,\n  };\n})(page, args, {\"actionId\":\"collect_product_pages_v1\",\"orders\":false,\"selectors\":{\"item\":\"li.product-item\",\"fields\":{\"name\":\"a.product-item-link\",\"price\":\".price-box .price\",\"link\":\"a.product-item-link\"},\"pagination\":{\"next\":\".pages .pages-item-next > a.action.next\",\"limiter\":\"select[data-role='limiter']\",\"total\":\".toolbar-amount\"}},\"maxPages\":12})",
           "requiredOutput": {
-            "actionId": "read_current_list_page_v1",
             "requiredKeys": [
               "ok",
-              "pageId",
-              "totalText",
-              "rawCardCount",
-              "ignoredCardCount",
-              "itemCount",
-              "items",
-              "nextHref",
               "complete",
-              "currentLimiterValue",
-              "limiterOptions",
+              "pageId",
+              "pages",
+              "scannedCount",
+              "items",
               "errors"
             ],
-            "itemKeys": [
-              "name",
-              "price",
-              "url"
-            ],
             "okWhen": [
-              "errors is empty",
-              "itemCount equals items.length",
-              "each item has name, url, and numeric price"
+              "all pages read without errors",
+              "no Next remains",
+              "observed total agrees with distinct record count when available"
             ]
           }
         }
@@ -2938,7 +2970,7 @@
           "visualAnchors": []
         },
         "allowedActions": [
-          "read_current_list_page_v1",
+          "collect_product_pages_v1",
           "verify_final_state_v1"
         ],
         "requiredNetworkEvents": [],
@@ -3041,6 +3073,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -3259,6 +3293,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -3450,6 +3486,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,
@@ -3675,6 +3713,8 @@
         "maxListPages": null,
         "loginBlockPolicy": "If the task is not authentication, /login or sign-in is a blocking state; stop instead of retrying navigation or form actions.",
         "listReadMaxCallsPerPageId": null,
+        "runtimeDistinctQueriesMax": null,
+        "runtimeContractActionsMax": null,
         "customListEvaluateMaxCalls": null,
         "supplementalQueriesMax": 0,
         "supplementalQueryAllowedOnlyWhen": null,

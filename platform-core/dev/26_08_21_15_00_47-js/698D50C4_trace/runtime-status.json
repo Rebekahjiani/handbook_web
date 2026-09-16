@@ -1,0 +1,13 @@
+{
+  "state": "recording",
+  "startedAt": "2026-08-21T07:00:48.084Z",
+  "elapsedMs": 150554,
+  "networkEventCount": 7255,
+  "interactionCount": 0,
+  "warningCount": 0,
+  "currentFiles": [
+    "network.jsonl",
+    "interactions.jsonl",
+    "runtime-status.json"
+  ]
+}

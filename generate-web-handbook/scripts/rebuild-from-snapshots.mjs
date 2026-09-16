@@ -5,7 +5,10 @@ import path from "node:path";
 import {
   buildWorkflowHandbook,
   loadTaskCorpus,
+  executableSkillMarkdown,
+  runtimeContract,
 } from "./task-workflows.mjs";
+import { shoppingCollectionAction } from "./workflows/shopping.mjs";
 import { loadContextModel } from "./context-model.mjs";
 import { auditRouter } from "./router-audit.mjs";
 import {
@@ -102,6 +105,16 @@ async function applyExecutionContractSeed(generated, seedFile) {
         ...JSON.parse(await fs.readFile(runtimeFile, "utf8")),
         contextModel: current.contextModel,
       };
+    }
+    const source = current.actions.find(action => action.actionId === "read_order_history_page_v1");
+    const program = source && current.siteKeys.includes("shopping")
+      ? shoppingCollectionAction(source, current.budgets.maxListPages || 12) : null;
+    if (program) {
+      current.actions = current.actions.map(action => action === source ? program : action);
+      current.allowedActions = current.allowedActions.map(id => id === source.actionId ? program.actionId : id);
+      current.ir.allowedActions = [...current.allowedActions];
+      generated.runtimeContracts[`${workflow}.json`] = runtimeContract(current);
+      generated.runtimeSkills[`${workflow}/SKILL.md`] = executableSkillMarkdown(current, generated.executionContract.site.name);
     }
     reused.push(workflow);
   }

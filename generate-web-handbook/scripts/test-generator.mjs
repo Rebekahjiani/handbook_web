@@ -392,17 +392,32 @@ assert.equal(
 );
 assert.equal(
   generated.executionContract.workflows["catalog-aggregation"].queryPlan
-    .strategyByOutput.completeCollection.strategy,
-  "brand-search-category-facet",
-);
-assert.equal(
-  generated.executionContract.workflows["catalog-aggregation"].queryPlan
     .actionBudget.menuEnumerationMax,
   0,
 );
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].queryPlan
+    .strategyByOutput.completeCollection.strategy,
+  "single-product-type-search-first",
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].queryPlan
+    .actionBudget.primaryTypeQueriesMax,
+  1,
+);
 assert.ok(
   generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
-    "仍没有产品类型的精确 facet",
+    "不得使用 Advanced Search Name",
+  ),
+);
+assert.ok(
+  !generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "使用 Advanced Search 的 Name 高精度集合",
+  ),
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "只有单核心产品词结果确实超过最大分页量时",
   ),
 );
 assert.ok(
@@ -475,6 +490,21 @@ assert.equal(
   generated.executionContract.workflows["catalog-aggregation"].budgets
     .listReadMaxCallsPerPageId,
   1,
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].budgets
+    .maxListPages,
+  2,
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].budgets
+    .runtimeDistinctQueriesMax,
+  2,
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].budgets
+    .runtimeContractActionsMax,
+  3,
 );
 assert.equal(
   generated.executionContract.workflows["catalog-aggregation"].budgets
@@ -895,5 +925,60 @@ assert.equal(repeated.tasks[0].pass_rate, 2 / 3);
 assert.equal(repeated.tasks[0].stability, "unstable");
 assert.equal(repeated.gate_passed, false);
 await fs.rm(repeatRoot, { recursive: true });
+
+// catalog-aggregation: budget exhaustion stopping rule machine fields
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "contract_action_rejected: workflow browser.evaluate budget exceeded",
+  ),
+  "catalog-aggregation SKILL.md must contain budget-exceeded rejection signal",
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "contract_action_rejected: workflow contract-action budget exceeded",
+  ),
+  "catalog-aggregation SKILL.md must contain contract-action budget rejection signal",
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "立即停止所有浏览器探索",
+  ),
+  "catalog-aggregation SKILL.md must instruct immediate stop of all browser exploration on budget exhaustion",
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "必须直接返回 `NOT_FOUND_ERROR`",
+  ),
+  "catalog-aggregation SKILL.md must require NOT_FOUND_ERROR when budget exhausted (no ledger possible)",
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "禁止凭记忆或推断填写 retrieved_data",
+  ),
+  "catalog-aggregation SKILL.md must forbid filling retrieved_data from memory or inference",
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "contract_action_failed: localweb MCP is unavailable",
+  ),
+  "catalog-aggregation SKILL.md must distinguish infrastructure errors from budget exhaustion",
+);
+assert.ok(
+  generated.runtimeSkills["catalog-aggregation/SKILL.md"].includes(
+    "本规则仅在收到",
+  ),
+  "catalog-aggregation SKILL.md must state the trigger condition for budget stop rule",
+);
+// verify normal success path is not affected: answerEvidenceGate and budgets intact
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].budgets.maxListPages,
+  2,
+  "execution contract maxListPages must remain 2 after budget exhaustion rule addition",
+);
+assert.equal(
+  generated.executionContract.workflows["catalog-aggregation"].budgets.runtimeContractActionsMax,
+  3,
+  "execution contract runtimeContractActionsMax must remain 3",
+);
 
 process.stdout.write("generator tests passed\n");

@@ -1,0 +1,17 @@
+{
+  "totalSegments": 13,
+  "completedSegments": 13,
+  "failedSegments": 0,
+  "totalDurationMs": 178669,
+  "totalEventCount": 2000454,
+  "avgSegmentDurationMs": 13743.76923076923,
+  "maxSegmentDurationMs": 15003,
+  "minSegmentDurationMs": 11538,
+  "avgEventCount": 153881.07692307694,
+  "maxEventCount": 423108,
+  "minEventCount": 33425,
+  "maxSwitchGapMs": 3463,
+  "dataLossOccurred": true,
+  "startedAt": 1787300820557,
+  "stoppedAt": 1787301014385
+}

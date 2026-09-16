@@ -17,7 +17,7 @@
 - 运行契约目录：`/Users/rebekah/handbook_web/handbooks/webarena-shopping/runtime-contracts`
 - 机器执行契约：`/Users/rebekah/handbook_web/handbooks/webarena-shopping/references/execution-contract.json`
 
-任务执行时以命中的 runtime contract 为直接输入；原始 trace 只用于审计、定位证据缺口和重建 Context Model，不应默认整批注入 Agent。
+在 `baselineB_skill_routed` 条件下，每次只把命中的一个 `runtime-skills/<route>/SKILL.md` 作为 Skill 文本注入 Agent。Runner 另行读取 `execution-contract.json` 中命中工作流的切片，把 preflight guards、Workflow IR 和 contract-action bridge 指令写入 prompt，并用该切片执行机器审计；不会把整个契约文件、顶层 `SKILL.md` 或全部 runtime Skills 原样注入。原始 trace 只用于审计、定位证据缺口和重建 Context Model，不应默认整批注入 Agent。
 
 ## 使用方法
 

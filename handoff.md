@@ -1,6 +1,6 @@
-# WebArena Shopping storefront Context Model 冻结报告
+# WebArena Shopping storefront Context Model 与 Skill 验证交接
 
-> 本文档记录 WebArena-Verified Shopping storefront 首版正式 Context Model 的证据范围、结构化产物、校验结果与冻结指纹。当前阶段到 Context Model freeze 为止，不包含 Skill 生成或注入实验。
+> §1–§13 记录首版正式 Context Model 的冻结过程；§14 起记录从该冻结版本生成 Skill、注入验证和后续优化。当前最新状态见 §21。
 
 ## 1. 结论
 
@@ -259,6 +259,14 @@ context-model/context-model.freeze.json
 | Runtime contracts | `/Users/rebekah/handbook_web/handbooks/webarena-shopping/runtime-contracts` |
 | 机器执行契约 | `/Users/rebekah/handbook_web/handbooks/webarena-shopping/references/execution-contract.json` |
 
+`baselineB_skill_routed` 每次运行只把路由命中的一个
+`runtime-skills/<route>/SKILL.md` 作为 Skill 文本注入 Agent。Runner 同时读取
+`execution-contract.json` 中命中工作流的切片，把其中的 preflight guards、Workflow IR
+和 contract-action bridge 指令写入 prompt，并用同一切片执行机器审计；不会把整个
+`execution-contract.json` 原样作为第二份 Skill 注入，也不会注入顶层 `SKILL.md` 或全部
+runtime Skills。`runtime-contracts/<route>.json` 是最小 contract 条件的产物，不是本轮
+`baselineB_skill_routed` 的原样注入文本。
+
 当前 Skill 有 14 个工作流路由：9 个由 Context Model capability binding 支持，5 个保持 baseline fallback。8 个唯一 capability 为：
 
 ```text
@@ -358,7 +366,7 @@ references/handbook.md
 
 - `SKILL.md` 只保留渐进式加载入口。
 - Router 只发布 `supported` capability binding；无法完整匹配时回退 baseline。
-- 每次只注入命中的一个 runtime contract。
+- 每次只注入命中的一个 runtime `SKILL.md`；Runner 另行加载命中工作流的 execution-contract 切片，用于机器提示和审计。
 - selector、JS 和 contract action 留在机器侧 execution contract。
 - 新 Context Model 没有 selector/JS 级 executable binding，因此订单机器动作显式复用 Round-53 seed；生成产物记录 seed 路径和 SHA-256，没有把它写成新 Context Model 自身证据。
 
@@ -828,3 +836,253 @@ task 282 的 Skill 运行是有效的 agent timeout 失败，但终止事件没�
 2. 修复 `spent` 对 canceled/refunded 订单的状态过滤，并让 task 332 命中 `order-aggregation`。
 3. 为 `catalog-aggregation` 增加可验证的覆盖边界和停止预算，针对 task 282 做回归。
 4. 先跑 task 319、332、282 的定向回归，再用本轮 20 个任务复跑 B；A 的冻结结果可复用，不重跑、不覆盖。
+
+## 18. 订单修复定向回归与 Catalog 继续优化（2026-09-02）
+
+### 18.1 已验证结论
+
+定向 A/B 回归完成，使用相同 `阿器`、600 秒 Agent 预算、官方 evaluator 和 `contract-audit-mode=enforce`：
+
+| Task | Baseline | Routed Skill | 结论 |
+| --- | ---: | ---: | --- |
+| 319 | 0 | 0 | 两组均正确返回 `NOT_FOUND_ERROR` + `retrieved_data: null`；冻结 evaluator 的归一化仍判 0，未修改 evaluator/GT |
+| 332 | 0 | 1 | 正向翻转；Skill 排除 canceled/refunded，并使用 item subtotal，2 月由 1309.03 修正为 912.50 |
+| 282 | 0 | 0 | 两组均 timeout；Skill 工具调用由 41 降至 37，但仍未完成 |
+
+结构化结果：
+
+```text
+/Users/rebekah/handbook_web/experiments/webarena-shopping-skill-generator-targeted3-20260901/results.json
+```
+
+服务器原始结果：
+
+```text
+/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-targeted3-20260901-v1
+```
+
+### 18.2 Catalog task 282 两轮生成器回归
+
+这里的“v1”仅指 task 282 的第一轮 catalog 生成器候选，相对于随后 v2 的运行轨迹更接近完成，因此也可称“相对较优 v1”；它不是通过版本，也不代表整体 Skill v1 或已证明准确率更高。
+
+v1 把完整集合策略改为单核心产品词优先并移除 Advanced Search 冲突。结果仍 timeout/0 分，但在 558.2 秒已经提交候选台账：包含 Ground Truth 的全部 9 个名称，`min=27.6`、`max=90.65` 均正确，同时多收 2 个候选。提交后又发生 navigate + snapshot，最终被 600 秒取消。
+
+v2 增加规范 URL 直达、严格标题验收和“证据提交后立即回答”。Agent 确实没有再操作搜索框，但面对宽结果没有遵循停止/精确 facet 策略，执行 13 次 contract list read 并继续分页到品牌搜索第 6 页，仍 timeout/0 分；execution contract audit 却报告 passed。
+
+```text
+v1 plan/results:
+/Users/rebekah/handbook_web/experiments/webarena-shopping-skill-generator-catalog282-20260902/{plan.json,results.json}
+
+v2 plan/results:
+/Users/rebekah/handbook_web/experiments/webarena-shopping-skill-generator-catalog282-20260902-v2/{plan.json,results.json}
+
+server v1:
+/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v1
+
+server v2:
+/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v2
+```
+
+已验证归因：
+
+1. task 332 证明订单聚合的 Skill 生成器与 typed aggregation policy 修改有效。
+2. task 282 v1 证明现有 trace/Context Model 足以找到 Ground Truth 的全部 9 个名称和正确价格边界，但集合 taxonomy 仍不足以解释至少一个标题本身含 `Slide` 的额外候选为何不属于 evaluator 集合。
+3. task 282 v2 证明 catalog 的主要阻塞已经从“缺少一条 Skill 文案”转为“机器预算没有被运行时执行”；继续堆自然语言规则不再是优先项。
+4. v2 比 v1 回退，已保留 v2 失败证据并把本地/服务器当前版本回退到 v1；下一步应先让 query/action budget 在运行时真正阻止宽集合分页，或把 catalog Skill 压缩成短状态机；同时为商品 taxonomy/可用集合增加 typed Context Model 证据。只有确认对应 taxonomy 页面或 facet 未被 trace 覆盖时，才做定向补采，不做全站通用补采。
+
+### 18.3 ArtifactTrace 最新版本核对
+
+已在本地 `/Users/rebekah/artifacttrace` 执行 `git fetch --prune tlaic`。结果：
+
+```text
+current HEAD           736596e425b60bf5de15864790d30a84e89863ac
+current branch         blr/webarena
+tracked upstream       tlaic/blr/webarena
+ahead / behind         12 / 0
+tlaic/main             db1211f7 (2026-08-18)
+main ancestor of HEAD  yes
+```
+
+当前本地分支已经包含 tlaic/main，并在其上增加 WebArena/contract-action 恢复与 guard 修复；没有可 pull 的新提交。远端 `tlaic/blr/webarena` 反而较旧，直接同步会删除本实验依赖的 `contract_action` 与 shopping runtime。因此本轮只 fetch/核对，没有合并，也没有把 ArtifactTrace 源码同步到服务器；服务器仅更新了生成后的 Shopping handbook/Skill/contract。
+
+### 18.4 当前校验与冻结产物
+
+```text
+generator tests passed
+contract evidence tests passed
+contract replay passed: 335 checks
+contract action replay passed
+quick_validate: top-level + 14 runtime Skills passed
+git diff --check: passed
+
+workflow generator  937e80a6d9ab635bf5cfecc2d099fa813fff4689c3cd10f331e74b6c453b6c45
+catalog Skill       3a3661ee4865e948ea2281737f29ba67334a822e274ed13111f2eca17645cccd
+execution contract  3bdf30355823c074ad1900726be9ebe852e1edc62f1fa662138bca9f9c52f1fb
+router              126edee1466780bc9fbb41e92d95e859a673872f0b7f6c0185360ef16145b116
+runner              832f87bc1c64bb752c1c04221a5ba7936048e63ec63be7190696a495134fa8c7
+```
+
+## 19. Execution contract 运行时预算回归（2026-09-02）
+
+### 19.1 已验证结论
+
+本轮把 catalog 查询/动作预算从自然语言与事后审计推进到
+`localweb_contract_action` 的运行时硬门禁：
+
+- `catalog-aggregation` 生成 `maxListPages=2`、`runtimeDistinctQueriesMax=2`、
+  `runtimeContractActionsMax=3`。
+- 运行时按 `run_id + workflow` 统计 contract action，并按规范化 `page_id`
+  统计 distinct query；分页、排序和 page-size 参数不产生新查询签名。
+- task 282 v3 中前 2 次列表读取成功，随后 4 次列表读取全部被拒绝，错误为
+  `contract_action_rejected: workflow browser.evaluate budget exceeded`。
+- v3 运行 660.093 秒后人工停止，证明已移除 runner 的 600 秒总时限；55 次模型调用、
+  55 次工具调用，无最终回答、未运行 evaluator，因此不得报告准确率。
+
+结构化结果：
+
+```text
+/Users/rebekah/handbook_web/experiments/webarena-shopping-skill-generator-catalog282-runtime-budget-20260902/{plan.json,results.json}
+```
+
+服务器证据：
+
+```text
+/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-runtime-budget-20260902-v3
+/opt/artifacttrace/local-at/tasks/09-02-wa-baselinebskillrouted-task-282-20260902-071946/.at/run/run_20260902_071949_91f9/trace.jsonl
+```
+
+### 19.2 失败边界与下一步
+
+已验证事实：预算耗尽后，Agent 仍继续执行普通浏览器工具；v3 最终包含 12 次 navigate、
+12 次 find、17 次 snapshot。contract-action 内预算能够阻止机器列表读取，但不能阻止绕过
+contract action 的普通浏览器查询/导航，也不会自动使 run 终止或进入 fallback。
+
+因此下一步继续优化运行时与生成器契约接线：把预算耗尽变成通用工具调度层可识别的
+fail-closed 状态，禁止后续探索动作，并触发最终回答或明确 fallback。当前不增加 trace，
+也不修改 Context Model 格式；现有证据已足以定位为执行控制问题。
+
+### 19.3 版本与基础设施说明
+
+- `https://gitee.com/tlaic/artifacttrace.git` 全部分支最新仍为
+  `tlaic/main=db1211f7`（2026-08-18）；当前实验分支 `736596e4` 已包含该 commit。
+- 600 秒限制来自实验 runner 的 `asyncio.wait_for`，不是 WebArena-Verified evaluator 要求；
+  runner 现以 `--timeout-seconds 0` 表示不施加总时限。
+- 服务器 AT 已从当前实验源码重建并带
+  `ARTIFACTTRACE_CONTRACT_ROOT=/opt/artifacttrace/local-at/benchmarks/generated-skills`
+  运行。
+- v1 因漏配 contract root 作废；v2 用于发现 `maxListPages` 未单独执行；两者不计准确率。
+
+## 20. Catalog budget 耗尽停止规则（2026-09-03，Round-55）
+
+### 20.1 根因定位
+
+task 282 v3 的 trace 证明：budget 拒绝信号 (`contract_action_rejected: workflow browser.evaluate budget exceeded`) 已到达 Agent，但 SKILL.md 无"收到此信号后立即停止浏览器探索"的状态机指令，Agent 继续执行 navigate/snapshot/find 共 41 次，660 秒后由人工停止。根因：**Skill 生成器未产出 budget 耗尽 → 停止探索 → 一次最终回答/fallback 的状态转移规则**。现有 trace 和 Context Model 已足以覆盖该逻辑，无需补采或改 Context Model 格式。
+
+### 20.2 候选修改（Round-55）
+
+在 `generate-web-handbook/scripts/task-workflows.mjs` 的 `catalog-aggregation` 硬执行契约分支，追加一条机器状态规则（第 1708 行后）：
+
+```
+budget 耗尽停止（机器状态）：收到 contract_action_rejected: workflow browser.evaluate budget exceeded
+或 contract_action_rejected: workflow contract-action budget exceeded 后，立即停止所有浏览器探索
+（navigate/snapshot/find/click 均不得再发起）。若当前台账已能支持最终答案，执行一次无工具最终回答；
+否则直接返回 NOT_FOUND_ERROR（retrieved_data: null）。禁止在 budget 耗尽后继续导航或试图读取更多
+商品页。基础设施错误（contract_action_failed: localweb MCP is unavailable 等）不触发此规则，允许重试一次。
+```
+
+rebuild 后 `catalog-aggregation/SKILL.md` 第 48 行输出该规则（SHA `4bbe35e12f0a43e03d799e2108c53fc5a367d7329719d490de60a3ba5ff30685`）。
+
+### 20.3 测试证据
+
+**反向验证（红→绿）**：
+
+- 破坏：注释生成器中 budget 耗尽行 → `AssertionError: catalog-aggregation SKILL.md must contain budget-exceeded rejection signal`（exit code 1）
+- 恢复：`npm test` 全部通过（335 replay checks + 5 新 budget-stop checks = 全绿）
+
+```
+npm test 输出（恢复后）：
+generator tests passed
+contract evidence tests passed: capability router, ledger, answer gate, provenance, promotion gate
+contract replay passed: 335 checks
+contract action replay passed: route, selector, budget, evidence
+```
+
+Rust 3/3 passed，py_compile OK，两仓库 git diff --check OK。
+
+### 20.4 晋级标准
+
+以下全部满足后晋级至下一轮 paired 测试：
+- task 282 相对当前 0 分改善（agent 终止并产出最终答案）
+- task 228/332/141 均保持 1 分
+- negative flip = 0
+- contract violation = 0
+
+实验产物：`experiments/webarena-shopping-skill-generator-20260903-budget-stop/`。服务器运行命令见 `run_commands.sh`。
+
+### 20.5 任务 3：已选下一方向（证据驱动）
+
+**唯一推荐方向：继续改 Skill 生成器**
+
+| 证据 | 推断 |
+|---|---|
+| task 282 v3 trace：budget 拒绝信号（`contract_action_rejected: workflow browser.evaluate budget exceeded`）4 次成功到达 Agent | 运行时 contract 字段正确；Rust budget 门禁已生效 |
+| Agent 收到拒绝后继续 navigate/snapshot/find 共 41 次（660s） | 根因：SKILL.md 无 budget 耗尽 → 停止 → 最终回答 的状态机规则 |
+| 候选 SKILL.md 已补充该规则（离线测试全绿） | 修复在 Skill 生成器层，不在 Context Model 层或 Trace 采集层 |
+| task 282 v1 已找到 9 个 GT 名称和正确价格边界（trace 已有足够页面证据） | 不需要补采 Trace |
+| catalog-aggregation Context Model 支持 browse-catalog / catalog-browse-category 等已覆盖动作 | Context Model schema 已能表达所需事实，不需要改 Context Model 格式 |
+
+**排除其他方向的原因：**
+- 补采 Trace：任务所需页面状态和事实已在 v1 trace 中存在（9/9 GT 名称被找到），补采无收益
+- 修改 Context Model 格式：typed taxonomy 和属性来源不是本轮失败原因；失败是行为控制层，不是数据表达层
+- 基础设施：v3 运行正常，拒绝信号准确传达，排除基础设施归因
+
+**下一轮才做：** 同协议 4 题在线验证通过晋级标准后，再进行 20 题 paired A/B，不提前宣称总体准确率提高。
+
+## 21. Catalog budget 停止规则在线验证（run7）：DSML 工具调用解析失败（2026-09-03，Round-56）
+
+### 21.1 run7 结果（4 题串行，contract-audit-mode=enforce，timeout_seconds=0）
+
+| Task | 上轮 | 本轮 | 变化 | 根因（验证） |
+|------|------|------|------|------|
+| 282 | 0 | 0 | 持平 | budget 规则正确触发并终止（NOT_FOUND_ERROR），但 budget 耗尽前数据未集齐 |
+| 228 | 1 | 0 | 名义负向翻转 | 最终 retrieved_data 泄漏原始 DSML（双竖线）标记，contract_action 未被执行 |
+| 332 | 1 | 0 | 名义负向翻转 | 首轮工具调用即 DSML（双竖线）→ 解析失败 → 0 工具调用 → retrieve_missing_evidence_read |
+| 141 | 1 | 0 | 名义负向翻转 | 首轮工具调用即 DSML（自闭合 invoke）→ 解析失败 → 0 工具调用 → retrieve_missing_evidence_read |
+
+名义 negative_flips = 3，但按任务书「基础设施失败不计为 Skill 结果」全部排除（见 21.3）。
+
+### 21.2 根因定位（基础设施，已验证码点）
+
+模型（DeepSeek-V4-Pro 经 openai 兼容网关）把工具调用以 **DSML 标记文本**形式输出，而非原生 `tool_calls`。运行时解析器 `parse_dsml_tool_calls`（`crates/executor/src/agentic_loop/stream_impl.rs:18`）只识别「单竖线 + 非自闭合」两种格式，与模型实际输出的两种方言不匹配。服务器 `at` 二进制构建时间 2026-09-02 15:16，其源 stream_impl.rs 与本机一致（已部署该解析器，但仅覆盖单竖线非自闭合 happy path）。
+
+| 方言 | 模型实际输出（U+ 码点验证） | 解析器期望 | 后果 |
+|------|---------------------------|-----------|------|
+| 双竖线 | `<` U+FF5C U+FF5C `DSML` U+FF5C U+FF5C `...`（332/228） | OPEN = `<` U+FF5C `DSML` U+FF5C `...`（单竖线） | `strip_prefix(OPEN)` 失败 → 返回 None → DSML 当纯文本 |
+| 自闭合 invoke | `<` U+FF5C `invoke name="X" />` + 游离 `</` U+FF5C `invoke>`（141） | `<` U+FF5C `invoke name="X"> ... </` U+FF5C `invoke>`（非自闭合） | invoke_re 不匹配 → 0 工具调用 |
+
+（`U+FF5C` = 全角竖线 `｜`；`DSML` 为 ASCII 四字母。141 的 OPEN/CLOSE 为单竖线，可匹配，但自闭合 invoke 无法解析；332/228 为双竖线，OPEN 即不匹配。）
+
+### 21.3 因果归因（候选未导致回退，不回滚）
+
+- **282 是唯一触发 budget 规则的样本**：本轮由机器契约终止（`contract_action_rejected: workflow browser.evaluate budget exceeded` → NOT_FOUND_ERROR），不再 660s 挂起。候选修复其既定目标成立。
+- **228/332/141 → 0 均为 DSML 解析失败**（0 工具调用 或 DSML 泄漏进 retrieved_data），三者均未收到 budget 拒绝信号，与 budget 规则无关。
+- 因此候选（budget 耗尽停止规则）**未导致回退**，按「候选导致回退必须恢复开工版本」不触发回滚；SKILL 保持 `e33033cd`。
+- 但候选**未晋级**：282 分数仍为 0（budget 耗尽前数据未集齐），且 228/332/141 因基础设施无法给出洁净的保持信号。
+
+### 21.4 任务 3：唯一方向 = 归入基础设施
+
+**唯一推荐方向：归入基础设施（provider/runner 的 DSML tool-call 解析失败），不借此修改 Skill 生成器 / Context Model / Trace 三层。**
+
+| 证据 | 推断 |
+|------|------|
+| 332/141/228 trace 中模型 tool-call 以 DSML 文本输出，解析器仅认单竖线非自闭合 | 故障在 runner 解析器 + provider 输出格式，不在生成器产物 |
+| run5 已现 DSML 泄漏；round-2/3 用 SKILL 文本（纯 JSON/禁凭记忆）未能修复 | 根因在基础设施，非 Skill 层；SKILL 文本无法阻止模型以 DSML 发出工具调用 |
+
+**排除方向：**
+- 继续改 Skill 生成器：失败非生成器缺陷；round-2/3 已证 SKILL 文本无法修复 DSML 泄漏
+- 改 Context Model 格式：所需事实已存在于 trace（282 v1 已找到 9/9 GT 名称），非表达不足
+- 补采 Trace：页面事实已存在，非缺数据
+
+**下一轮基础设施修复建议（本轮满 3 轮候选已停，不在本轮实施）：** 扩展 `parse_dsml_tool_calls` 支持①双竖线方言与②自闭合 `<invoke name="X"/>` 方言，配套单测 + 服务器重建；修复后重跑 282/228/332/141 四题取得洁净晋级信号，再单独审视 282 的 budget 校准（耗尽前数据未集齐）。
+
+**下一轮才做：** 基础设施修复后同协议 4 题验证通过晋级标准，再做 20 题 paired A/B，不提前宣称总体准确率提高。

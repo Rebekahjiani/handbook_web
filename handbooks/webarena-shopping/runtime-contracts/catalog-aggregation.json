@@ -62,7 +62,7 @@
     "fallbackOnUnsupported": true
   },
   "allowedActions": [
-    "read_current_list_page_v1",
+    "collect_product_pages_v1",
     "submit_answer_evidence_v1",
     "verify_final_state_v1"
   ],
@@ -143,11 +143,31 @@
   "contractAction": {
     "tool": "localweb_contract_action",
     "arguments": {
-      "action_id": "read_current_list_page_v1",
+      "action_id": "collect_product_pages_v1",
       "workflow": "catalog-aggregation",
       "route": "shopping",
       "contract_path": "webarena-shopping/references/execution-contract.json",
-      "page_id": "$CURRENT_URL"
+      "page_id": "$CURRENT_URL",
+      "arguments": {}
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxPages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2,
+          "default": 2
+        },
+        "nameContains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional literal title substrings, all required. Omit for semantic or synonym matching."
+        }
+      }
     },
     "required_first_step": true,
     "call": "到达目标列表页后的第一个读取动作必须调用该 tool；page_id 使用当前 URL；不要调用 browser_evaluate 代替。返回 evidence 后才能继续下一页或选择目标。"

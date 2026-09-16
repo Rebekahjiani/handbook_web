@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "experiment": "webarena-shopping-skill-generator-catalog282-20260902-v1",
+  "status": "completed_failure",
+  "task_id": 282,
+  "condition": "baselineB_skill_routed",
+  "official_score": 0.0,
+  "runtime_status": "timeout",
+  "agent_response_status": "UNKNOWN_ERROR",
+  "trace": {
+    "path": "/opt/artifacttrace/local-at/tasks/09-02-wa-baselinebskillrouted-task-282-20260902-014516/.at/run/run_20260902_014519_d0dc/trace.jsonl",
+    "events": 130,
+    "model_calls_completed": 32,
+    "tool_calls_completed": 32,
+    "terminal_event": "run_cancelled",
+    "token_usage": {"input": 1938206, "output": 33886}
+  },
+  "candidate_result_submitted_at_seconds": 558.2,
+  "submitted_result": {
+    "names_count": 11,
+    "expected_names_count": 9,
+    "all_expected_names_present": true,
+    "extra_names_count": 2,
+    "min": 27.6,
+    "max": 90.65
+  },
+  "observations": {
+    "advanced_search_used": false,
+    "ground_truth_values_recovered": true,
+    "post_submission_browser_calls": 2,
+    "root_causes": [
+      "search box and category exploration consumed too much time before contract reads",
+      "candidate admission expanded a title mismatch through detail-page semantics",
+      "the agent navigated and took a snapshot after submitting answer evidence",
+      "one remaining extra title contains the core term and cannot be excluded from current Context Model taxonomy evidence"
+    ]
+  },
+  "server_output": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v1/baselineB_skill_routed/282",
+  "evaluator": {
+    "mode": "official evaluator manually invoked after runner PATH did not expose uv",
+    "result": "/opt/artifacttrace/local-at/benchmarks/runs/webarena-shopping-skill-generator-catalog282-20260902-v1/baselineB_skill_routed/282/eval_result.json"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-08-21T08:59:40.383Z",
+  "url": "http://localhost:7770/",
+  "title": "One Stop Market",
+  "cdpPort": 9222,
+  "basename": "698D50C4",
+  "outputs": {
+    "screenshot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/698D50C4_pre/698D50C4.png",
+    "html": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/698D50C4_pre/698D50C4.html",
+    "accessibilitySnapshot": "/Users/rebekah/handbook_web/platform-core/dev/26_08_21_16_59_39-js/698D50C4_pre/698D50C4.accessibility.json"
+  }
+}
